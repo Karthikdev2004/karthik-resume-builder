@@ -1,0 +1,83 @@
+John Doe
+Senior Software Engineer
+San Francisco, CA
+
+Email: john.doe@example.com
+Phone: +1 (555) 123-4567
+LinkedIn: linkedin.com/in/johndoe
+GitHub: github.com/johndoe
+
+PROFESSIONAL SUMMARY
+Experienced software engineer with 8+ years of expertise in building scalable web applications. Proficient in React, Node.js, TypeScript, and cloud technologies. Strong track record of leading development teams and delivering high-impact projects.
+
+EXPERIENCE
+
+Senior Software Engineer
+Tech Corp, San Francisco, CA
+January 2020 - Present
+• Led a team of 5 developers in architecting and deploying a microservices-based SaaS platform
+• Improved application performance by 40% through optimization and caching strategies
+• Implemented CI/CD pipelines using Jenkins and Docker, reducing deployment time by 60%
+• Mentored junior developers and conducted code reviews to maintain code quality
+
+Software Engineer
+Web Solutions Inc, San Francisco, CA
+June 2018 - December 2019
+• Developed and maintained client-facing web applications using React and Node.js
+• Built RESTful APIs serving 100K+ daily active users
+• Collaborated with UX designers to implement responsive and accessible interfaces
+• Optimized database queries, reducing average response time by 35%
+
+Junior Developer
+Startup Innovations, Palo Alto, CA
+July 2016 - May 2018
+• Developed features for web applications using JavaScript, HTML, and CSS
+• Implemented automated testing using Jest and Cypress
+• Participated in agile development process with daily standups and sprint planning
+
+EDUCATION
+
+Bachelor of Science in Computer Science
+University of California, Berkeley
+2012 - 2016
+GPA: 3.8/4.0
+
+SKILLS
+Programming Languages: JavaScript, TypeScript, Python, Java, SQL
+Frontend: React, Redux, Next.js, HTML5, CSS3, Tailwind CSS
+Backend: Node.js, Express, NestJS, GraphQL, REST APIs
+Databases: PostgreSQL, MongoDB, Redis, MySQL
+Cloud & DevOps: AWS (EC2, S3, Lambda), Docker, Kubernetes, CI/CD, Git
+Tools: VS Code, Postman, JIRA, Figma
+
+PROJECTS
+
+E-Commerce Platform
+Built a full-stack e-commerce application with payment integration using Stripe
+Tech Stack: React, Node.js, PostgreSQL, AWS
+Duration: 2021
+
+Task Management App
+Developed a collaborative task management application with real-time updates
+Tech Stack: React, Socket.io, MongoDB, Node.js
+Duration: 2020
+
+CERTIFICATIONS
+
+AWS Certified Developer - Associate
+Amazon Web Services
+Issued: March 2022
+
+Professional Scrum Master I (PSM I)
+Scrum.org
+Issued: January 2021
+
+ACHIEVEMENTS
+
+Best Project Award
+Tech Corp - Awarded for outstanding contribution to flagship product
+2021
+
+Hackathon Winner
+Bay Area Developer Hackathon - 1st place for innovative AI solution
+2020

@@ -1,0 +1,54 @@
+@import './fonts.css';
+@import './tailwind.css';
+@import './theme.css';
+
+/* Print Styles - Fix pagination issue */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  #resume-preview,
+  #resume-preview * {
+    visibility: visible;
+  }
+
+  #resume-preview {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 210mm !important;
+
+    /* Remove fixed height - let content decide */
+    height: auto !important;
+    min-height: auto !important;
+
+    padding: 0 !important;
+    /* Let template handle padding or reduce */
+    margin: 0 !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  /* Prevent section splitting across pages */
+  section {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  header {
+    page-break-after: avoid;
+  }
+
+  /* Prevent orphaned content */
+  h1,
+  h2,
+  h3 {
+    page-break-after: avoid;
+  }
+}

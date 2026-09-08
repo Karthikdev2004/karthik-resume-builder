@@ -1,0 +1,40 @@
+Senior Full Stack Developer
+Google - Mountain View, CA
+
+ABOUT THE ROLE
+We are seeking a talented Senior Full Stack Developer to join our Cloud Platform team. You will be responsible for designing, developing, and maintaining scalable web applications that serve millions of users worldwide.
+
+RESPONSIBILITIES
+• Design and develop scalable web applications using modern frameworks
+• Collaborate with product managers and designers to define product requirements
+• Write clean, maintainable, and well-documented code
+• Mentor junior developers and conduct code reviews
+• Participate in architecture decisions and technical planning
+• Ensure applications meet performance, security, and accessibility standards
+• Troubleshoot and debug complex issues in production environments
+
+REQUIRED QUALIFICATIONS
+• 5+ years of experience in full-stack web development
+• Strong proficiency in JavaScript/TypeScript and modern frameworks (React, Vue, or Angular)
+• Experience with Node.js and building RESTful APIs
+• Solid understanding of database systems (SQL and NoSQL)
+• Experience with cloud platforms (AWS, GCP, or Azure)
+• Proficiency in Git and version control workflows
+• Strong problem-solving skills and attention to detail
+• Excellent communication and teamwork abilities
+
+PREFERRED QUALIFICATIONS
+• Experience with Next.js or other React frameworks
+• Knowledge of GraphQL and modern API design
+• Experience with Docker and Kubernetes
+• Familiarity with CI/CD pipelines and DevOps practices
+• Experience with microservices architecture
+• Knowledge of TypeScript and testing frameworks (Jest, Cypress)
+• Bachelor's degree in Computer Science or related field
+
+WHAT WE OFFER
+• Competitive salary and equity package
+• Comprehensive health benefits
+• Flexible work arrangements
+• Professional development opportunities
+• Collaborative and innovative work environment
