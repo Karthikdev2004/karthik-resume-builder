@@ -98,6 +98,10 @@ function isPdfBuffer(buffer: ArrayBuffer): boolean {
 
 /**
  * Compiles LaTeX source code into a PDF Blob and URL
+ * Attempts multiple endpoints in priority order:
+ * 1. Local Vite proxy (/api/compile-latex) — no CORS issues
+ * 2. Direct TeXLive CGI — may be blocked by browser CORS
+ * 3. latex.ytotech.com API — alternative compiler
  */
 export async function compileLatex(
   latexCode: string,
@@ -113,36 +117,117 @@ export async function compileLatex(
 
   const preparedSource = resolveLatexImports(latexCode);
 
-  // Define endpoints to attempt in priority order:
-  // 1. Local Vite proxy (/api/compile-latex) - avoids any browser CORS/SSL blocks
-  // 2. Direct TeXLive CGI (https://texlive.net/cgi-bin/latexcgi)
-  const endpoints = [
-    '/api/compile-latex',
-    'https://texlive.net/cgi-bin/latexcgi',
-  ];
+  // ---- Strategy 1: Local Vite proxy (recommended — bypasses CORS) ----
+  try {
+    const formData = new FormData();
+    formData.append('filecontents[]', preparedSource);
+    formData.append('filename[]', 'document.tex');
+    formData.append('engine', 'pdflatex');
+    formData.append('return', 'pdf');
 
-  let lastLog = '';
-  let lastError = '';
+    const response = await fetch('/api/compile-latex', {
+      method: 'POST',
+      body: formData,
+      signal,
+    });
 
-  for (const endpoint of endpoints) {
-    try {
-      const formData = new FormData();
-      formData.append('filecontents[]', preparedSource);
-      formData.append('filename[]', 'document.tex');
-      formData.append('engine', 'pdflatex');
-      formData.append('return', 'pdf');
+    if (response.ok) {
+      const arrayBuffer = await response.arrayBuffer();
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        body: formData,
-        signal,
-      });
+      if (isPdfBuffer(arrayBuffer)) {
+        const pdfBlob = new Blob([arrayBuffer], { type: 'application/pdf' });
+        const pdfUrl = URL.createObjectURL(pdfBlob);
+        return {
+          success: true,
+          pdfBlob,
+          pdfUrl,
+          log: 'Compilation successful (via local proxy)',
+        };
+      } else {
+        // Response is the compiler log / error transcript
+        const decoder = new TextDecoder('utf-8');
+        const logText = decoder.decode(arrayBuffer);
+        const errMsg = extractLatexErrorMessage(logText);
+        return {
+          success: false,
+          error: errMsg,
+          log: logText,
+        };
+      }
+    } else {
+      // Non-200 — fall through to next strategy
+      const errorText = await response.text().catch(() => '');
+      console.warn('[LaTeX] Proxy returned HTTP', response.status, errorText);
+    }
+  } catch (err: any) {
+    if (err.name === 'AbortError') throw err;
+    console.warn('[LaTeX] Proxy endpoint failed:', err.message);
+  }
 
-      // If we got a successful HTTP response
-      if (response.ok) {
+  // ---- Strategy 2: Direct TeXLive CGI ----
+  try {
+    const formData = new FormData();
+    formData.append('filecontents[]', preparedSource);
+    formData.append('filename[]', 'document.tex');
+    formData.append('engine', 'pdflatex');
+    formData.append('return', 'pdf');
+
+    const response = await fetch('https://texlive.net/cgi-bin/latexcgi', {
+      method: 'POST',
+      body: formData,
+      signal,
+    });
+
+    if (response.ok) {
+      const arrayBuffer = await response.arrayBuffer();
+
+      if (isPdfBuffer(arrayBuffer)) {
+        const pdfBlob = new Blob([arrayBuffer], { type: 'application/pdf' });
+        const pdfUrl = URL.createObjectURL(pdfBlob);
+        return {
+          success: true,
+          pdfBlob,
+          pdfUrl,
+          log: 'Compilation successful (direct TeXLive)',
+        };
+      } else {
+        const decoder = new TextDecoder('utf-8');
+        const logText = decoder.decode(arrayBuffer);
+        return {
+          success: false,
+          error: extractLatexErrorMessage(logText),
+          log: logText,
+        };
+      }
+    }
+  } catch (err: any) {
+    if (err.name === 'AbortError') throw err;
+    console.warn('[LaTeX] Direct TeXLive endpoint failed:', err.message);
+  }
+
+  // ---- Strategy 3: latex.ytotech.com API ----
+  try {
+    const payload = {
+      compiler: 'pdflatex',
+      resources: [
+        {
+          main: true,
+          content: preparedSource,
+        },
+      ],
+    };
+
+    const response = await fetch('https://latex.ytotech.com/builds/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal,
+    });
+
+    if (response.ok) {
+      const ct = response.headers.get('content-type') || '';
+      if (ct.includes('application/pdf')) {
         const arrayBuffer = await response.arrayBuffer();
-
-        // Check if the response is indeed a PDF
         if (isPdfBuffer(arrayBuffer)) {
           const pdfBlob = new Blob([arrayBuffer], { type: 'application/pdf' });
           const pdfUrl = URL.createObjectURL(pdfBlob);
@@ -150,40 +235,27 @@ export async function compileLatex(
             success: true,
             pdfBlob,
             pdfUrl,
-            log: 'Compilation successful',
-          };
-        } else {
-          // It's text/transcript containing the error log
-          const decoder = new TextDecoder('utf-8');
-          const logText = decoder.decode(arrayBuffer);
-          lastLog = logText;
-          lastError = extractLatexErrorMessage(logText);
-          // Return immediately with the real compiler error
-          return {
-            success: false,
-            error: lastError,
-            log: lastLog,
+            log: 'Compilation successful (via ytotech)',
           };
         }
-      } else {
-        // Non-200 HTTP response
-        const errorText = await response.text().catch(() => '');
-        lastLog = errorText || `HTTP ${response.status}: ${response.statusText}`;
-        lastError = extractLatexErrorMessage(lastLog);
       }
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
-        throw err;
-      }
-      lastLog = err.message || String(err);
-      lastError = lastLog;
-      // Try next endpoint
+      // Non-PDF response is an error
+      const errorText = await response.text().catch(() => '');
+      return {
+        success: false,
+        error: extractLatexErrorMessage(errorText) || 'Compilation failed on fallback service.',
+        log: errorText,
+      };
     }
+  } catch (err: any) {
+    if (err.name === 'AbortError') throw err;
+    console.warn('[LaTeX] ytotech fallback failed:', err.message);
   }
 
   return {
     success: false,
-    error: lastError || 'Unable to connect to LaTeX compiler service.',
-    log: lastLog || 'Network failure communicating with compiler.',
+    error: 'Failed to fetch — unable to reach any LaTeX compiler service. Check your internet connection and try again.',
+    log: 'All compiler endpoints failed. This is typically caused by:\n1. No internet connection\n2. Network firewall blocking outbound requests\n3. The LaTeX compiler services (texlive.net) being temporarily unavailable\n\nTry refreshing the page or checking your network.',
   };
 }
+

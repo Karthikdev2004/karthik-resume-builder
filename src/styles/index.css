@@ -32,7 +32,7 @@
 
   @page {
     size: A4;
-    margin: 2;
+    margin: 0;
   }
 
   /* Prevent section splitting across pages */

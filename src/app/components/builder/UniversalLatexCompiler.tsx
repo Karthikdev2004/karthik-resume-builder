@@ -108,27 +108,16 @@ export const UniversalLatexCompiler: React.FC<UniversalLatexCompilerProps> = ({
     }
   }, [preparedCode, onCompileStart, onCompileSuccess, onCompileError]);
 
-  const isFirstMount = useRef(true);
-
-  // Compile immediately on initial mount, and debounce when code changes
+  // Compile once on mount only — the parent triggers recompilation by changing
+  // the `key` prop (recompileTrigger), which causes this component to remount.
+  // No debounced auto-recompile on code changes.
+  const hasMounted = useRef(false);
   useEffect(() => {
-    if (isFirstMount.current) {
-      isFirstMount.current = false;
+    if (!hasMounted.current) {
+      hasMounted.current = true;
       executeCompile();
-      return;
     }
-
-    const timer = setTimeout(() => {
-      executeCompile();
-    }, 1200);
-
-    return () => {
-      clearTimeout(timer);
-      if (abortCtrlRef.current) {
-        abortCtrlRef.current.abort();
-      }
-    };
-  }, [executeCompile]);
+  }, []);
 
   // Clean up object URLs on unmount
   useEffect(() => {
