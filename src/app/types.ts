@@ -64,4 +64,5 @@ export type ResumeData = {
   achievements: Achievement[];
   skills: string;
   template?: TemplateId;
+  latexCode?: string;
 };

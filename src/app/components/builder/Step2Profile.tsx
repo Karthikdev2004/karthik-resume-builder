@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Button, Input, Label, Textarea } from "@/app/components/ui";
+import { Button } from "@/app/components/ui";
 import { motion, AnimatePresence } from "motion/react";
 import {
   User, Briefcase, GraduationCap, Code, FolderGit2, Award, FileCheck,
@@ -7,216 +7,367 @@ import {
   Linkedin, Globe, Mail, Phone, MapPin, Search, AlertCircle, LayoutTemplate, ArrowRight,
   FileCode, Folder, FileText, Upload, RefreshCw, Download, Layers, History, Layout, Share2,
   ChevronDown, Type, Bold, Italic, List, Quote, Link2, Omega, Settings, Eye, ChevronRight,
-  FolderPlus, FilePlus, Edit3, X, Check
+  FolderPlus, FilePlus, Edit3, X, Check, MoreVertical, HelpCircle, Terminal
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ResumeData, Experience, Education, Project } from "@/app/types";
+import { ResumeData } from "@/app/types";
 import { getTemplate, TEMPLATES, TemplateId } from "@/app/templates";
 import { downloadResumePDF } from "@/lib/pdf-browser";
-import { VFLogo } from "@/app/components/VFLogo";
+import { UniversalLatexCompiler, compileLatex, revokePdfUrl } from "@/app/components/builder/UniversalLatexCompiler";
 
-// --- LaTeX Converter Helpers ---
-function dataToLaTeX(data: ResumeData): string {
-  const name = data.personalInfo?.fullName || "Henry Madison";
-  const title = data.personalInfo?.title || "Graphic Designer";
-  const email = data.personalInfo?.email || "henry@example.com";
-  const phone = data.personalInfo?.phone || "+1 (555) 234-5678";
-  const location = data.personalInfo?.location || "New York, NY";
-  const linkedin = data.personalInfo?.linkedin || "linkedin.com/in/user";
-  const github = data.personalInfo?.github || "github.com/user";
-  const website = data.personalInfo?.website || "myportfolio.com";
-  const summary = data.summary || "Creative professional with experience in building high quality applications and visual brand identities.";
-  const skills = data.skills || "React, TypeScript, Node.js, Next.js, Figma, UI/UX Design";
-
-  let expCode = "";
-  if (data.experience && data.experience.length > 0) {
-    expCode = data.experience.map(e => `\\job{${e.role || "Role"}}{${e.company || "Company"}}{${e.duration || "2021 - Present"}}\n- ${e.description || "Key achievements and responsibilities"}`).join("\n\n");
-  } else {
-    expCode = `\\job{Senior Designer}{Studio Design}{2021 - Present}\n- Led visual identity projects for Fortune 500 clients.\n- Optimized brand design systems.`;
-  }
-
-  let eduCode = "";
-  if (data.education && data.education.length > 0) {
-    eduCode = data.education.map(e => `\\degree{${e.degree || "Degree"}}{${e.school || "University"}}{${e.year || "2017 - 2021"}}`).join("\n");
-  } else {
-    eduCode = `\\degree{B.F.A. Graphic Design}{Art University}{2017 - 2021}`;
-  }
-
-  return `\\documentclass[a4paper,10pt]{article}
-
-% Packages
-\\usepackage[margin=0cm]{geometry}
-\\usepackage{xcolor}
-\\usepackage{tikz}
-\\usepackage{fontawesome5}
-\\usepackage{helvet}
-\\renewcommand{\\familydefault}{\\sfdefault}
-
-% Colors matching the template
-\\definecolor{sidebar}{HTML}{1C252E}    % Dark navy/black sidebar
-\\definecolor{textgray}{HTML}{555555}
-\\definecolor{lightgray}{HTML}{E8E8E8}
-\\definecolor{barfill}{HTML}{1C252E}
-\\definecolor{barbg}{HTML}{D0D0D0}
-
-\\begin{document}
-\\name{${name}}
-\\title{${title}}
-\\email{${email}}
-\\phone{${phone}}
-\\location{${location}}
-\\linkedin{${linkedin}}
-\\github{${github}}
-\\website{${website}}
-
-\\section{Profile}
-${summary}
-
-\\section{Experience}
-${expCode}
-
-\\section{Education}
-${eduCode}
-
-\\section{Skills}
-${skills}
-
-\\end{document}`;
+// --- Overleaf Style Green Clover Logo SVG ---
+function OverleafLogo({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="11" cy="11" r="7" fill="#16a34a" />
+      <circle cx="21" cy="11" r="7" fill="#22c55e" opacity="0.9" />
+      <circle cx="11" cy="21" r="7" fill="#15803d" opacity="0.9" />
+      <circle cx="21" cy="21" r="7" fill="#16a34a" />
+      <circle cx="16" cy="16" r="3.5" fill="#ffffff" />
+    </svg>
+  );
 }
 
-function laTeXToData(code: string, currentData: ResumeData): ResumeData {
+// --- LaTeX Generator Helper ---
+function dataToLaTeX(data: ResumeData, customTitle?: string): string {
+  if (data.latexCode && data.latexCode.trim()) {
+    return data.latexCode;
+  }
+  const name = data.personalInfo?.fullName || "Your Name";
+  const title = customTitle || data.personalInfo?.title || "Curriculum Vitae";
+  const email = data.personalInfo?.email || "email@example.com";
+  const phone = data.personalInfo?.phone || "";
+  const location = data.personalInfo?.location || "";
+  const summary = data.summary || "Experienced professional dedicated to building high quality solutions.";
+  const skills = data.skills || "JavaScript, TypeScript, React, Node.js, Python, Git";
+
+  return `\\documentclass[a4paper,10pt]{article}
+\\usepackage[utf8]{inputenc}
+\\usepackage{geometry}
+\\geometry{a4paper, margin=0.75in}
+\\usepackage{hyperref}
+\\usepackage{enumitem}
+
+\\begin{document}
+
+\\begin{center}
+  {\\LARGE \\textbf{${name}}}\\\\[4pt]
+  {\\large ${title}}\\\\[4pt]
+  \\small ${email} ${phone ? `| ${phone}` : ''} ${location ? `| ${location}` : ''}
+\\end{center}
+
+\\vspace{8pt}
+
+\\section*{Professional Summary}
+${summary}
+
+\\section*{Skills}
+${skills}
+
+\\section*{Experience}
+\\textbf{Senior Engineer} \\hfill 2022 -- Present\\\\
+\\textit{Tech Innovations Inc.}
+\\begin{itemize}[noitemsep,topsep=2pt]
+  \\item Spearheaded core system development and optimized latency by 35\\%.
+  \\item Collaborated with cross-functional teams to deliver production features.
+\\end{itemize}
+
+\\section*{Education}
+\\textbf{B.S. in Computer Science} \\hfill 2018 -- 2022\\\\
+\\textit{University of Technology}
+
+\\end{document}
+`;
+}
+
+function parseLaTeXData(code: string, currentData: ResumeData): ResumeData {
   const extractVal = (tag: string): string => {
     const match = code.match(new RegExp(`\\\\${tag}\\{([^}]*)\\}`));
     return match ? match[1].trim() : "";
   };
 
-  const name = extractVal("name");
   const title = extractVal("title");
-  const email = extractVal("email");
-  const phone = extractVal("phone");
-  const location = extractVal("location");
-  const linkedin = extractVal("linkedin");
-  const github = extractVal("github");
-  const website = extractVal("website");
-
-  const profileMatch = code.match(/\\section\{Profile\}\s*([^\\#]*)/i);
-  const summary = profileMatch ? profileMatch[1].trim() : currentData.summary;
-
-  const skillsMatch = code.match(/\\section\{Skills\}\s*([^\\#]*)/i);
-  const skills = skillsMatch ? skillsMatch[1].trim() : currentData.skills;
+  const author = extractVal("author");
+  const introMatch = code.match(/\\section\*?\{([^}]*)\}\s*([^\\#]*)/i);
+  const summary = introMatch ? introMatch[2].trim() : currentData.summary;
 
   return {
     ...currentData,
+    latexCode: code,
     personalInfo: {
       ...currentData.personalInfo,
-      fullName: name || currentData.personalInfo.fullName,
-      title: title || currentData.personalInfo.title,
-      email: email || currentData.personalInfo.email,
-      phone: phone || currentData.personalInfo.phone,
-      location: location || currentData.personalInfo.location,
-      linkedin: linkedin || currentData.personalInfo.linkedin,
-      github: github || currentData.personalInfo.github,
-      website: website || currentData.personalInfo.website,
+      title: title || currentData.personalInfo?.title || "",
+      fullName: author || currentData.personalInfo?.fullName || "",
     },
-    summary: summary || currentData.summary,
-    skills: skills || currentData.skills,
+    summary: summary || currentData.summary || "",
   };
 }
-
-type Section = "personal" | "experience" | "education" | "projects" | "skills" | "certifications" | "achievements";
-
-const SECTIONS = [
-  { id: "personal", label: "Personal", icon: User },
-  { id: "skills", label: "Skills", icon: Code },
-  { id: "experience", label: "Experience", icon: Briefcase },
-  { id: "projects", label: "Projects", icon: FolderGit2 },
-  { id: "education", label: "Education", icon: GraduationCap },
-  { id: "certifications", label: "Certifications", icon: FileCheck },
-  { id: "achievements", label: "Achievements", icon: Award },
-] as const;
 
 export function Step2Profile({
   data,
   onChange,
   onNext,
-  onBack
+  onBack,
+  projectTitle
 }: {
   data: ResumeData;
   onChange: (d: Partial<ResumeData>) => void;
-  onNext: () => void;
+  onNext?: () => void;
   onBack: () => void;
+  projectTitle?: string;
 }) {
+  const initialTitle = projectTitle || data.personalInfo?.title || "Resume";
+  const [projectName, setProjectName] = useState<string>(initialTitle);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [codeText, setCodeText] = useState<string>(() => data.latexCode || dataToLaTeX(data, initialTitle));
+  const codeTextRef = useRef<string>(codeText);
+  codeTextRef.current = codeText;
+
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
+  const [isCompiling, setIsCompiling] = useState<boolean>(false);
+  const [compileError, setCompileError] = useState<string | null>(null);
+  const [compileLog, setCompileLog] = useState<string | null>(null);
+  const [showLogModal, setShowLogModal] = useState<boolean>(false);
+  const compileSeqRef = useRef<number>(0);
+  const activePdfUrlRef = useRef<string | null>(null);
+
   const [viewMode, setViewMode] = useState<"code" | "visual">("code");
   const [layoutMode, setLayoutMode] = useState<"split" | "editor" | "preview">("split");
-  const [activeSection, setActiveSection] = useState<Section>("personal");
-  const [selectedTemplate, setSelectedTemplate] = useState<TemplateId>("sidebar-left");
-  const [codeText, setCodeText] = useState<string>(() => dataToLaTeX(data));
-  const [pendingChanges, setPendingChanges] = useState<number>(2);
-  const [isCompiling, setIsCompiling] = useState<boolean>(false);
-  const [zoom, setZoom] = useState<number>(0.55);
-  const [projectName, setProjectName] = useState<string>(data.personalInfo.title ? `resume ${data.personalInfo.title}` : "resume 1");
-  const [showTemplateDropdown, setShowTemplateDropdown] = useState<boolean>(false);
+  const [zoom, setZoom] = useState<number>(0.85);
+  const [showFileMenu, setShowFileMenu] = useState<boolean>(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplateId>("classic");
+  const [previewModeType, setPreviewModeType] = useState<"article" | "resume">("article");
+  const [copiedShare, setCopiedShare] = useState<boolean>(false);
 
-  // Sync data to LaTeX when data changes externally
+  // Pane resizing splitter state
+  const [splitRatio, setSplitRatio] = useState<number>(50); // percentage: 15% - 85%
+  const [isDraggingSplitter, setIsDraggingSplitter] = useState<boolean>(false);
+  const splitContainerRef = useRef<HTMLDivElement>(null);
+
+  // Splitter mouse drag handler
   useEffect(() => {
-    setCodeText(dataToLaTeX(data));
-  }, [data.personalInfo.fullName, data.personalInfo.title, data.summary, data.skills]);
+    if (!isDraggingSplitter) return;
 
-  // Recompile handler
-  const handleRecompile = () => {
-    setIsCompiling(true);
-    setTimeout(() => {
-      if (viewMode === "code") {
-        const updated = laTeXToData(codeText, data);
-        onChange(updated);
-      } else {
-        setCodeText(dataToLaTeX(data));
-      }
-      setPendingChanges(0);
-      setIsCompiling(false);
-    }, 300);
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!splitContainerRef.current) return;
+      const rect = splitContainerRef.current.getBoundingClientRect();
+      const newWidth = e.clientX - rect.left;
+      const totalWidth = rect.width;
+      if (totalWidth <= 0) return;
+
+      let percent = (newWidth / totalWidth) * 100;
+      percent = Math.max(15, Math.min(85, percent));
+      setSplitRatio(percent);
+    };
+
+    const handleMouseUp = () => {
+      setIsDraggingSplitter(false);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isDraggingSplitter]);
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const highlightRef = useRef<HTMLDivElement>(null);
+  const gutterRef = useRef<HTMLDivElement>(null);
+
+  // Synchronize scrolling between code textarea, highlighted overlay, and line number gutter
+  const handleEditorScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
+    if (highlightRef.current) {
+      highlightRef.current.scrollTop = e.currentTarget.scrollTop;
+      highlightRef.current.scrollLeft = e.currentTarget.scrollLeft;
+    }
+    if (gutterRef.current) {
+      gutterRef.current.scrollTop = e.currentTarget.scrollTop;
+    }
   };
 
-  // Code change handler
-  const handleCodeChange = (val: string) => {
-    setCodeText(val);
-    setPendingChanges((prev) => prev + 1);
-    const updated = laTeXToData(val, data);
+  const [recompileTrigger, setRecompileTrigger] = useState<number>(0);
+
+  // True LaTeX Recompile handler connected to LaTeX engine
+  const handleRecompile = () => {
+    setRecompileTrigger((prev) => prev + 1);
+  };
+
+  // Compile on initial mount
+  useEffect(() => {
+    handleRecompile();
+    return () => {
+      if (activePdfUrlRef.current) {
+        revokePdfUrl(activePdfUrlRef.current);
+      }
+    };
+  }, []);
+
+  const handleCodeChange = (newCode: string) => {
+    setCodeText(newCode);
+    codeTextRef.current = newCode;
+    const updated = parseLaTeXData(newCode, data);
     onChange(updated);
   };
 
-  // Form change handler
-  const handleDataChange = (updates: Partial<ResumeData>) => {
-    onChange(updates);
-    const merged = { ...data, ...updates };
-    setCodeText(dataToLaTeX(merged));
-    setPendingChanges((prev) => prev + 1);
-  };
-
-  const updateInfo = (field: keyof ResumeData["personalInfo"], value: string) => {
-    handleDataChange({ personalInfo: { ...data.personalInfo, [field]: value } });
-  };
-
   const handleDownload = () => {
-    downloadResumePDF(data, selectedTemplate);
+    if (pdfBlob) {
+      const a = document.createElement('a');
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      a.href = blobUrl;
+      const safeTitle = (projectName || 'Resume').replace(/[^a-zA-Z0-9_-]/g, '_');
+      a.download = `${safeTitle}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+    } else {
+      downloadResumePDF(data, selectedTemplate);
+    }
   };
 
-  const SelectedTemplateComponent = getTemplate(selectedTemplate).component;
+  const handleShare = () => {
+    navigator.clipboard?.writeText(window.location.href);
+    setCopiedShare(true);
+    setTimeout(() => setCopiedShare(false), 2000);
+  };
+
+  // Extract sections for outline
+  const parsedSections = React.useMemo(() => {
+    const matches = [...codeText.matchAll(/\\section\*?\{([^}]+)\}/g)];
+    if (matches.length > 0) {
+      return matches.map((m) => m[1].trim());
+    }
+    return ["Document"];
+  }, [codeText]);
+
+  // Extract metadata from code for visual view
+  const compiledTitle = React.useMemo(() => {
+    const match = codeText.match(/\\title\{([^}]*)\}/);
+    return match ? match[1].trim() : projectName;
+  }, [codeText, projectName]);
+
+  const compiledAuthor = React.useMemo(() => {
+    const match = codeText.match(/\\author\{([^}]*)\}/);
+    return match ? match[1].trim() : data.personalInfo?.fullName || "";
+  }, [codeText, data.personalInfo?.fullName]);
+
+  const compiledDate = React.useMemo(() => {
+    const match = codeText.match(/\\date\{([^}]*)\}/);
+    return match ? match[1].trim() : "";
+  }, [codeText]);
+
+  const compiledIntro = React.useMemo(() => {
+    const match = codeText.match(/\\section\*?\{([^}]*)\}\s*([\s\S]*?)(?=\\section|\\end\{document\}|$)/i);
+    return match && match[2].trim() ? match[2].trim() : (data.summary || "");
+  }, [codeText, data.summary]);
 
   const lines = codeText.split("\n");
 
+  const SelectedTemplateComponent = getTemplate(selectedTemplate).component;
+
+  // Syntax highlighting renderer
+  const renderHighlightedCode = () => {
+    return lines.map((line, lIdx) => {
+      const commentIdx = line.indexOf("%");
+      const codePart = commentIdx >= 0 ? line.slice(0, commentIdx) : line;
+      const commentPart = commentIdx >= 0 ? line.slice(commentIdx) : "";
+
+      const tokenRegex = /(\\[a-zA-Z]+)|(\{([^}]*)\})|([{}])/g;
+      let lastIndex = 0;
+      const tokens: React.ReactNode[] = [];
+      let match;
+
+      while ((match = tokenRegex.exec(codePart)) !== null) {
+        if (match.index > lastIndex) {
+          tokens.push(codePart.slice(lastIndex, match.index));
+        }
+        if (match[1]) {
+          // Command like \documentclass, \usepackage, \title, etc. -> pink/magenta
+          tokens.push(
+            <span key={`${lIdx}-${match.index}-cmd`} className="text-[#e879f9] font-medium">
+              {match[1]}
+            </span>
+          );
+        } else if (match[2]) {
+          // Argument {article}, {graphicx}, etc. -> cyan
+          tokens.push(
+            <span key={`${lIdx}-${match.index}-arg`} className="text-cyan-400">
+              <span className="text-slate-400">{"{"}</span>
+              <span className="text-cyan-300">{match[3]}</span>
+              <span className="text-slate-400">{"}"}</span>
+            </span>
+          );
+        } else if (match[4]) {
+          tokens.push(
+            <span key={`${lIdx}-${match.index}-br`} className="text-slate-400">
+              {match[4]}
+            </span>
+          );
+        }
+        lastIndex = tokenRegex.lastIndex;
+      }
+      if (lastIndex < codePart.length) {
+        tokens.push(codePart.slice(lastIndex));
+      }
+
+      return (
+        <div key={lIdx} className="leading-6 min-h-[1.5rem] whitespace-pre">
+          {tokens}
+          {commentPart && <span className="text-[#64748b] italic">{commentPart}</span>}
+          {line.length === 0 && "\u00A0"}
+        </div>
+      );
+    });
+  };
+
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-[#0d131f] text-slate-200 font-sans w-full overflow-hidden select-none">
+    <div className="flex flex-col h-screen w-screen bg-[#0d131f] text-slate-200 font-sans overflow-hidden select-none">
       {/* ----------------- 1. TOP OVERLEAF NAVBAR ----------------- */}
       <header className="h-11 bg-[#131b29] border-b border-[#233045] px-3 flex items-center justify-between z-30 shrink-0 text-xs">
         {/* Left Menu Items */}
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 pr-2 border-r border-[#233045]">
-            <VFLogo size={24} showText={false} />
-          </div>
+          <button
+            onClick={onBack}
+            title="Back to All Projects"
+            className="flex items-center gap-2 pr-2 border-r border-[#233045] hover:opacity-80 transition-opacity"
+          >
+            <OverleafLogo size={22} />
+          </button>
 
-          <div className="flex items-center gap-1.5 text-slate-300 font-medium">
-            <button className="hover:text-white hover:bg-[#1f2b3e] px-2 py-1 rounded transition-colors">File</button>
+          <div className="relative flex items-center gap-1 text-slate-300 font-medium">
+            <button
+              onClick={() => setShowFileMenu(!showFileMenu)}
+              className="hover:text-white hover:bg-[#1f2b3e] px-2 py-1 rounded transition-colors"
+            >
+              File
+            </button>
+            {showFileMenu && (
+              <div className="absolute top-8 left-0 w-48 bg-[#182233] border border-[#263750] rounded-md shadow-2xl z-50 py-1 text-xs">
+                <button
+                  onClick={() => { setShowFileMenu(false); onBack(); }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-[#202d44] text-slate-200 flex items-center justify-between"
+                >
+                  <span>Go to Dashboard</span>
+                  <span className="text-[10px] text-slate-400">Esc</span>
+                </button>
+                <button
+                  onClick={() => { setShowFileMenu(false); handleRecompile(); }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-[#202d44] text-slate-200 flex items-center justify-between"
+                >
+                  <span>Recompile</span>
+                  <span className="text-[10px] text-slate-400">Ctrl+Enter</span>
+                </button>
+                <button
+                  onClick={() => { setShowFileMenu(false); handleDownload(); }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-[#202d44] text-slate-200"
+                >
+                  Download PDF
+                </button>
+              </div>
+            )}
             <button className="hover:text-white hover:bg-[#1f2b3e] px-2 py-1 rounded transition-colors">Edit</button>
             <button className="hover:text-white hover:bg-[#1f2b3e] px-2 py-1 rounded transition-colors">Insert</button>
             <button className="hover:text-white hover:bg-[#1f2b3e] px-2 py-1 rounded transition-colors">View</button>
@@ -230,13 +381,27 @@ export function Step2Profile({
 
         {/* Center Project Name Dropdown */}
         <div className="flex items-center gap-1 text-slate-200 font-medium cursor-pointer hover:bg-[#1f2b3e] px-3 py-1 rounded transition-colors">
-          <span className="text-sm">{projectName}</span>
-          <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+          {isEditingTitle ? (
+            <input
+              type="text"
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              onBlur={() => setIsEditingTitle(false)}
+              onKeyDown={(e) => e.key === "Enter" && setIsEditingTitle(false)}
+              autoFocus
+              className="bg-[#121927] border border-[#2b3a52] rounded px-2 py-0.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+            />
+          ) : (
+            <div onClick={() => setIsEditingTitle(true)} className="flex items-center gap-1.5">
+              <span className="text-sm">{projectName}</span>
+              <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+            </div>
+          )}
         </div>
 
         {/* Right Action Controls */}
-        <div className="flex items-center gap-3">
-          <button className="flex items-center gap-1 text-slate-300 hover:text-white hover:bg-[#1f2b3e] px-2.5 py-1 rounded transition-colors">
+        <div className="flex items-center gap-2 md:gap-3">
+          <button className="flex items-center gap-1.5 text-slate-300 hover:text-white hover:bg-[#1f2b3e] px-2.5 py-1 rounded transition-colors">
             <History className="h-3.5 w-3.5" />
             <span>History</span>
           </button>
@@ -266,474 +431,503 @@ export function Step2Profile({
             </button>
           </div>
 
-          <button className="bg-[#16a34a] hover:bg-[#15803d] text-white px-3 py-1 rounded font-semibold flex items-center gap-1.5 shadow-sm transition-colors text-xs">
+          <button
+            onClick={handleShare}
+            className="bg-[#16a34a] hover:bg-[#15803d] text-white px-3 py-1 rounded font-semibold flex items-center gap-1.5 shadow-sm transition-colors text-xs"
+          >
             <Share2 className="h-3.5 w-3.5" />
-            <span>Share</span>
+            <span>{copiedShare ? "Copied!" : "Share"}</span>
           </button>
         </div>
       </header>
 
-      {/* ----------------- 2. MAIN SPLIT WORKSPACE BODY ----------------- */}
+      {/* ----------------- 2. MAIN WORKSPACE BODY ----------------- */}
       <div className="flex-1 flex overflow-hidden">
-        {/* ----- LEFT SIDEBAR (File Tree & Outline) ----- */}
+        {/* ----- LEFTMOST DOCK (Overleaf Navigation Strip) ----- */}
+        <div className="w-11 bg-[#0f141f] border-r border-[#233045] flex flex-col items-center py-3 justify-between shrink-0 select-none z-20">
+          <div className="flex flex-col items-center gap-4 w-full">
+            <button
+              onClick={onBack}
+              title="Return to Projects Dashboard"
+              className="p-1 hover:bg-[#1a2436] rounded-lg transition-colors group"
+            >
+              <OverleafLogo size={20} />
+            </button>
+
+            <div className="w-5 h-px bg-[#233045]" />
+
+            <button
+              title="Project Files"
+              className="p-2 text-emerald-400 bg-[#192436] rounded-md transition-colors relative"
+            >
+              <div className="absolute -left-2.5 top-1.5 bottom-1.5 w-1 bg-emerald-500 rounded-r" />
+              <FileText className="h-4 w-4" />
+            </button>
+
+            <button
+              title="Search"
+              className="p-2 text-slate-400 hover:text-slate-200 hover:bg-[#192436] rounded-md transition-colors"
+            >
+              <Search className="h-4 w-4" />
+            </button>
+
+            <button
+              title="Git & History"
+              className="p-2 text-slate-400 hover:text-slate-200 hover:bg-[#192436] rounded-md transition-colors"
+            >
+              <FolderGit2 className="h-4 w-4" />
+            </button>
+
+            <button
+              title="Comments & Chat"
+              className="p-2 text-slate-400 hover:text-slate-200 hover:bg-[#192436] rounded-md transition-colors"
+            >
+              <Quote className="h-4 w-4" />
+            </button>
+
+            <button
+              title="Symbols & AI"
+              className="p-2 text-slate-400 hover:text-slate-200 hover:bg-[#192436] rounded-md transition-colors"
+            >
+              <Sparkles className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="flex flex-col items-center gap-3 w-full">
+            <button
+              title="Settings"
+              className="p-2 text-slate-400 hover:text-slate-200 hover:bg-[#192436] rounded-md transition-colors"
+            >
+              <Settings className="h-4 w-4" />
+            </button>
+            <button
+              title="Help"
+              className="p-2 text-slate-400 hover:text-slate-200 hover:bg-[#192436] rounded-md transition-colors"
+            >
+              <HelpCircle className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* ----- SIDEBAR (File Tree & Outline) ----- */}
         <aside className="w-52 bg-[#121927] border-r border-[#233045] flex flex-col shrink-0">
           {/* File Tree Section */}
           <div className="p-3 border-b border-[#233045]">
-            <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
-              <span className="font-semibold uppercase tracking-wider text-[10px] text-slate-300">File tree</span>
+            <div className="flex items-center justify-between text-xs text-slate-400 mb-2.5">
+              <div className="flex items-center gap-1 font-semibold text-[11px] text-slate-300">
+                <ChevronDown className="h-3 w-3 text-slate-400" />
+                <span>File tree</span>
+              </div>
               <div className="flex items-center gap-1">
                 <button title="New File" className="hover:text-white p-0.5 rounded hover:bg-[#1f2b3e]"><FilePlus className="h-3.5 w-3.5" /></button>
                 <button title="New Folder" className="hover:text-white p-0.5 rounded hover:bg-[#1f2b3e]"><FolderPlus className="h-3.5 w-3.5" /></button>
                 <button title="Upload" className="hover:text-white p-0.5 rounded hover:bg-[#1f2b3e]"><Upload className="h-3.5 w-3.5" /></button>
-                <button title="Delete" className="hover:text-white p-0.5 rounded hover:bg-[#1f2b3e]"><Trash2 className="h-3.5 w-3.5" /></button>
+                <button title="Delete" className="hover:text-white p-0.5 rounded hover:bg-[#1f2b3e]"><X className="h-3.5 w-3.5" /></button>
               </div>
             </div>
 
             <div className="space-y-1">
-              <div className="flex items-center gap-2 px-2 py-1.5 rounded bg-[#1c283c] text-emerald-400 text-xs font-semibold cursor-pointer border-l-2 border-emerald-500">
-                <FileCode className="h-4 w-4 shrink-0" />
-                <span className="truncate">main.tex</span>
-              </div>
-              <div className="flex items-center gap-2 px-2 py-1 text-slate-400 text-xs hover:bg-[#192334] rounded cursor-pointer transition-colors">
-                <FileText className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">style.cls</span>
+              <div className="flex items-center justify-between px-2.5 py-1.5 rounded bg-[#1c283c] text-emerald-400 text-xs font-semibold cursor-pointer border-l-2 border-emerald-500">
+                <div className="flex items-center gap-2 truncate">
+                  <FileCode className="h-4 w-4 shrink-0 text-emerald-400" />
+                  <span className="truncate">main.tex</span>
+                </div>
+                <MoreVertical className="h-3.5 w-3.5 opacity-60 hover:opacity-100" />
               </div>
             </div>
           </div>
 
           {/* File Outline Section */}
           <div className="flex-1 p-3 overflow-y-auto">
-            <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
-              File outline
+            <div className="flex items-center gap-1 font-semibold text-[11px] text-slate-300 mb-2">
+              <ChevronDown className="h-3 w-3 text-slate-400" />
+              <span>File outline</span>
             </div>
             <div className="space-y-1 text-xs text-slate-400">
-              {SECTIONS.map((sec) => (
-                <button
-                  key={sec.id}
-                  onClick={() => {
-                    setActiveSection(sec.id);
-                    setViewMode("visual");
-                  }}
-                  className={`w-full text-left px-2 py-1 rounded transition-colors flex items-center gap-1.5 ${
-                    activeSection === sec.id && viewMode === "visual"
-                      ? "text-emerald-400 bg-[#1c283c] font-medium"
-                      : "hover:text-slate-200 hover:bg-[#192334]"
-                  }`}
+              {parsedSections.map((secName, idx) => (
+                <div
+                  key={idx}
+                  className="px-2 py-1 rounded hover:bg-[#1c283c] hover:text-emerald-400 cursor-pointer transition-colors flex items-center gap-1.5"
                 >
-                  <ChevronRight className="h-3 w-3 opacity-60" />
-                  <span className="capitalize">{sec.label}</span>
-                </button>
+                  <span className="text-slate-300 font-medium">{secName}</span>
+                </div>
               ))}
             </div>
           </div>
         </aside>
 
-        {/* ----- MIDDLE PANE (Code & Visual Dual-Mode Editor) ----- */}
-        {(layoutMode === "split" || layoutMode === "editor") && (
-          <main className="flex-1 bg-[#161f2e] border-r border-[#233045] flex flex-col min-w-0">
-            {/* File Tab Header */}
-            <div className="h-9 bg-[#121927] border-b border-[#233045] px-3 flex items-center justify-between text-xs shrink-0">
-              <div className="flex items-center gap-2">
-                <div className="bg-[#161f2e] text-slate-200 px-3 py-1.5 rounded-t font-mono text-xs border-t-2 border-emerald-500 flex items-center gap-2 border-x border-[#233045]">
-                  <FileCode className="h-3.5 w-3.5 text-emerald-400" />
-                  <span>main.tex</span>
-                  <X className="h-3 w-3 opacity-50 hover:opacity-100 cursor-pointer" />
+        {/* ----- SPLIT CONTAINER (Code Editor + Center Splitter + PDF Preview) ----- */}
+        <div ref={splitContainerRef} className="flex-1 flex min-w-0 h-full overflow-hidden relative">
+          {/* Transparent Drag Shield to prevent iframe/textarea from capturing cursor events during resizing */}
+          {isDraggingSplitter && (
+            <div className="absolute inset-0 z-50 cursor-col-resize select-none bg-transparent" />
+          )}
+
+          {/* ----- MIDDLE PANE (Code & Visual Editor) ----- */}
+          {(layoutMode === "split" || layoutMode === "editor") && (
+            <main
+              style={layoutMode === "split" ? { width: `${splitRatio}%`, flex: "none" } : { flex: 1 }}
+              className="bg-[#141b27] border-r border-[#233045] flex flex-col min-w-0 h-full overflow-hidden"
+            >
+              {/* File Tab Header */}
+              <div className="h-9 bg-[#121927] border-b border-[#233045] px-2 flex items-center justify-between text-xs shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="bg-[#141b27] text-slate-200 px-3 py-1.5 rounded-t text-xs flex items-center gap-2 border-t-2 border-emerald-500 border-x border-[#233045]">
+                    <FileCode className="h-3.5 w-3.5 text-emerald-400" />
+                    <span>main.tex</span>
+                    <X className="h-3 w-3 opacity-50 hover:opacity-100 cursor-pointer" />
+                  </div>
                 </div>
               </div>
 
               {/* Formatting Toolbar & Code/Visual Toggle */}
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1 border-r border-[#233045] pr-3 text-slate-400">
-                  <button title="Bold" className="hover:text-white p-1 rounded hover:bg-[#1f2b3e]"><Bold className="h-3.5 w-3.5" /></button>
-                  <button title="Italic" className="hover:text-white p-1 rounded hover:bg-[#1f2b3e]"><Italic className="h-3.5 w-3.5" /></button>
-                  <button title="Heading" className="hover:text-white p-1 rounded hover:bg-[#1f2b3e]"><Type className="h-3.5 w-3.5" /></button>
-                  <button title="List" className="hover:text-white p-1 rounded hover:bg-[#1f2b3e]"><List className="h-3.5 w-3.5" /></button>
-                  <button title="Quote" className="hover:text-white p-1 rounded hover:bg-[#1f2b3e]"><Quote className="h-3.5 w-3.5" /></button>
+              <div className="h-9 bg-[#151e2c] border-b border-[#233045] px-3 flex items-center justify-between text-xs shrink-0 select-none overflow-hidden">
+                <div className="flex items-center gap-2 text-slate-400 shrink-0">
+                  <button title="Undo" className="hover:text-white p-1 rounded"><ArrowRight className="h-3.5 w-3.5 rotate-180" /></button>
+                  <button title="Redo" className="hover:text-white p-1 rounded"><ArrowRight className="h-3.5 w-3.5" /></button>
+                  <div className="h-3.5 w-px bg-[#26354b] mx-0.5" />
+                  <button title="Font size" className="hover:text-white p-1 rounded font-serif font-bold text-xs">TT</button>
+                  <button title="Bold" className="hover:text-white p-1 rounded font-bold"><Bold className="h-3.5 w-3.5" /></button>
+                  <button title="Italic" className="hover:text-white p-1 rounded italic"><Italic className="h-3.5 w-3.5" /></button>
+                  <button title="Symbols" className="hover:text-white p-1 rounded"><Omega className="h-3.5 w-3.5" /></button>
+                  <button title="Link" className="hover:text-white p-1 rounded"><Link2 className="h-3.5 w-3.5" /></button>
+                  <button title="Comment" className="hover:text-white p-1 rounded"><Quote className="h-3.5 w-3.5" /></button>
+                  <button title="Image" className="hover:text-white p-1 rounded"><FileText className="h-3.5 w-3.5" /></button>
+                  <button title="Table" className="hover:text-white p-1 rounded"><Layout className="h-3.5 w-3.5" /></button>
+                  <button title="List" className="hover:text-white p-1 rounded"><List className="h-3.5 w-3.5" /></button>
+                  <button title="More" className="hover:text-white p-1 rounded">...</button>
                 </div>
 
-                {/* Code vs Visual Pill Toggle matching Image 2 */}
-                <div className="flex items-center bg-[#0d131f] border border-[#26354b] rounded-full p-0.5 text-xs font-medium">
-                  <button
-                    onClick={() => setViewMode("code")}
-                    className={`px-3 py-0.5 rounded-full transition-all ${
-                      viewMode === "code"
-                        ? "bg-[#10b981] text-white font-bold shadow-sm"
-                        : "text-slate-400 hover:text-slate-200"
-                    }`}
-                  >
-                    Code
-                  </button>
-                  <button
-                    onClick={() => setViewMode("visual")}
-                    className={`px-3 py-0.5 rounded-full transition-all ${
-                      viewMode === "visual"
-                        ? "bg-[#10b981] text-white font-bold shadow-sm"
-                        : "text-slate-400 hover:text-slate-200"
-                    }`}
-                  >
-                    Visual
-                  </button>
-                </div>
+                {/* Code vs Visual Pill Toggle matching Image 3 */}
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center bg-[#0d131f] border border-[#26354b] rounded-full p-0.5 text-xs font-medium">
+                    <button
+                      onClick={() => setViewMode("code")}
+                      className={`px-3 py-0.5 rounded-full transition-all ${
+                        viewMode === "code"
+                          ? "bg-[#16a34a] text-white font-bold shadow-sm"
+                          : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      Code
+                    </button>
+                    <button
+                      onClick={() => setViewMode("visual")}
+                      className={`px-3 py-0.5 rounded-full transition-all ${
+                        viewMode === "visual"
+                          ? "bg-[#16a34a] text-white font-bold shadow-sm"
+                          : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      Visual
+                    </button>
+                  </div>
 
-                <div className="flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 text-[11px]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span>Editing</span>
+                  <div className="flex items-center gap-1 text-slate-300 text-xs hover:bg-[#1e2a3c] px-2 py-1 rounded cursor-pointer">
+                    <Edit3 className="h-3.5 w-3.5 text-emerald-400" />
+                    <span>Editing</span>
+                    <ChevronDown className="h-3 w-3 opacity-60" />
+                  </div>
+
+                  <button title="Find and Replace" className="text-slate-400 hover:text-white p-1 rounded">
+                    <Search className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               </div>
-            </div>
 
-            {/* Editor Content Area */}
-            <div className="flex-1 overflow-hidden relative">
-              {viewMode === "code" ? (
-                /* CODE MODE: Interactive LaTeX Code Editor with Line Numbers */
-                <div className="flex h-full font-mono text-xs overflow-auto bg-[#101726]">
-                  {/* Line Numbers Column */}
-                  <div className="w-10 bg-[#121a2a] text-slate-500 py-3 select-none text-right pr-3 font-mono border-r border-[#212d42] shrink-0">
-                    {lines.map((_, idx) => (
-                      <div key={idx} className="leading-6">{idx + 1}</div>
-                    ))}
-                  </div>
-
-                  {/* Code Textarea */}
-                  <textarea
-                    value={codeText}
-                    onChange={(e) => handleCodeChange(e.target.value)}
-                    spellCheck={false}
-                    className="flex-1 bg-[#101726] text-slate-200 p-3 leading-6 resize-none focus:outline-none font-mono whitespace-pre text-xs selection:bg-blue-600 selection:text-white"
-                  />
-                </div>
-              ) : (
-                /* VISUAL MODE: Form Editor for sections */
-                <div className="h-full overflow-y-auto p-6 bg-[#121927]">
-                  <div className="max-w-3xl mx-auto space-y-6">
-                    <div className="flex items-center justify-between border-b border-[#233045] pb-3">
-                      <h2 className="text-lg font-bold text-white capitalize flex items-center gap-2">
-                        <span>{activeSection} Form</span>
-                        <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full">
-                          Visual Mode
-                        </span>
-                      </h2>
-                      <div className="flex items-center gap-2">
-                        {SECTIONS.map((sec) => (
-                          <button
-                            key={sec.id}
-                            onClick={() => setActiveSection(sec.id)}
-                            className={`px-2.5 py-1 rounded text-xs transition-colors ${
-                              activeSection === sec.id
-                                ? "bg-emerald-600 text-white font-semibold"
-                                : "bg-[#1c283c] text-slate-300 hover:bg-[#25344d]"
-                            }`}
-                          >
-                            {sec.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {activeSection === "personal" && (
-                      <PersonalForm data={data} updateInfo={updateInfo} onChange={handleDataChange} />
-                    )}
-                    {activeSection === "experience" && (
-                      <ListEditor
-                        items={data.experience}
-                        onChange={(items) => handleDataChange({ experience: items })}
-                        type="experience"
-                      />
-                    )}
-                    {activeSection === "education" && (
-                      <ListEditor
-                        items={data.education}
-                        onChange={(items) => handleDataChange({ education: items })}
-                        type="education"
-                      />
-                    )}
-                    {activeSection === "projects" && (
-                      <ListEditor
-                        items={data.projects}
-                        onChange={(items) => handleDataChange({ projects: items })}
-                        type="projects"
-                      />
-                    )}
-                    {activeSection === "skills" && (
-                      <SkillsForm data={data.skills} onChange={(s) => handleDataChange({ skills: s })} />
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </main>
-        )}
-
-        {/* ----- RIGHT PANE (Live Compiler Output & PDF Preview Canvas) ----- */}
-        {(layoutMode === "split" || layoutMode === "preview") && (
-          <div className="flex-1 bg-[#1a2332] flex flex-col min-w-0 relative">
-            {/* Compiler Header Controls Bar matching Image 2 */}
-            <div className="h-9 bg-[#121927] border-b border-[#233045] px-3 flex items-center justify-between text-xs shrink-0">
-              {/* Recompile Button & PDF Download */}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleRecompile}
-                  disabled={isCompiling}
-                  className="bg-[#16a34a] hover:bg-[#15803d] text-white px-3 py-1 rounded font-bold flex items-center gap-1.5 shadow-md transition-all active:scale-95 text-xs"
-                >
-                  <RefreshCw className={`h-3.5 w-3.5 ${isCompiling ? "animate-spin" : ""}`} />
-                  <span>Recompile</span>
-                  {pendingChanges > 0 && (
-                    <span className="bg-emerald-900/80 text-emerald-200 text-[10px] px-1.5 py-0.2 rounded-full font-mono">
-                      {pendingChanges}
-                    </span>
-                  )}
-                </button>
-
-                <button
-                  onClick={handleDownload}
-                  title="Download PDF"
-                  className="p-1 rounded bg-[#1c283c] hover:bg-[#25344d] text-slate-300 hover:text-white transition-colors"
-                >
-                  <Download className="h-4 w-4" />
-                </button>
-
-                {/* Template Selector Dropdown */}
-                <div className="relative">
-                  <button
-                    onClick={() => setShowTemplateDropdown(!showTemplateDropdown)}
-                    className="flex items-center gap-1 bg-[#1c283c] hover:bg-[#25344d] text-slate-300 px-2 py-1 rounded text-xs"
-                  >
-                    <LayoutTemplate className="h-3.5 w-3.5 text-emerald-400" />
-                    <span className="capitalize">{selectedTemplate}</span>
-                    <ChevronDown className="h-3 w-3 opacity-60" />
-                  </button>
-
-                  {showTemplateDropdown && (
-                    <div className="absolute left-0 mt-1 w-44 bg-[#141c2b] border border-[#233045] rounded-md shadow-2xl z-50 p-1">
-                      {TEMPLATES.map((tmpl) => (
-                        <button
-                          key={tmpl.id}
-                          onClick={() => {
-                            setSelectedTemplate(tmpl.id);
-                            setShowTemplateDropdown(false);
-                          }}
-                          className={`w-full text-left px-2 py-1.5 rounded text-xs transition-colors ${
-                            selectedTemplate === tmpl.id ? "bg-emerald-600 text-white font-semibold" : "text-slate-300 hover:bg-[#1c283c]"
-                          }`}
-                        >
-                          {tmpl.name}
-                        </button>
+              {/* Editor Content Area */}
+              <div className="flex-1 overflow-hidden relative">
+                {viewMode === "code" ? (
+                  /* CODE MODE: Interactive LaTeX Code Editor with Line Numbers and Syntax Highlighting */
+                  <div className="flex h-full font-mono text-xs overflow-hidden bg-[#111724]">
+                    {/* Line Numbers Column */}
+                    <div
+                      ref={gutterRef}
+                      className="w-10 bg-[#0f1521] text-slate-500 py-3 select-none text-right pr-3 font-mono border-r border-[#202b3d] shrink-0 overflow-hidden leading-6 text-xs"
+                    >
+                      {lines.map((_, idx) => (
+                        <div key={idx} className="leading-6">{idx + 1}</div>
                       ))}
                     </div>
-                  )}
-                </div>
+
+                    {/* Highlighted text layer & transparent editable textarea */}
+                    <div className="relative flex-1 h-full overflow-hidden bg-[#111724]">
+                      <div
+                        ref={highlightRef}
+                        className="absolute inset-0 p-3 pl-4 font-mono text-xs leading-6 pointer-events-none overflow-hidden select-none whitespace-pre text-slate-100"
+                      >
+                        {renderHighlightedCode()}
+                      </div>
+
+                      <textarea
+                        ref={textareaRef}
+                        value={codeText}
+                        onChange={(e) => handleCodeChange(e.target.value)}
+                        onKeyDown={(e) => {
+                          if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                            e.preventDefault();
+                            handleRecompile();
+                          }
+                        }}
+                        onScroll={handleEditorScroll}
+                        spellCheck={false}
+                        className="absolute inset-0 p-3 pl-4 font-mono text-xs leading-6 bg-transparent text-transparent caret-white resize-none focus:outline-none selection:bg-blue-600/40 selection:text-transparent whitespace-pre overflow-y-auto overflow-x-auto"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  /* VISUAL MODE: Form Editor */
+                  <div className="h-full overflow-y-auto p-6 bg-[#121927]">
+                    <div className="max-w-2xl mx-auto space-y-5">
+                      <div className="flex items-center justify-between border-b border-[#233045] pb-3">
+                        <h2 className="text-base font-bold text-white flex items-center gap-2">
+                          <span>Visual Settings</span>
+                          <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full">
+                            Synchronized
+                          </span>
+                        </h2>
+                      </div>
+
+                      <div className="space-y-4 text-xs">
+                        <div>
+                          <label className="block text-slate-400 mb-1">Document Title</label>
+                          <input
+                            type="text"
+                            value={compiledTitle}
+                            onChange={(e) => {
+                              const newTitle = e.target.value;
+                              setProjectName(newTitle);
+                              setCodeText((prev) => {
+                                const updated = prev.includes("\\title{")
+                                  ? prev.replace(/\\title\{[^}]*\}/, `\\title{${newTitle}}`)
+                                  : `\\title{${newTitle}}\n` + prev;
+                                codeTextRef.current = updated;
+                                return updated;
+                              });
+                            }}
+                            className="w-full bg-[#111724] border border-[#263750] rounded px-3 py-1.5 text-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-slate-400 mb-1">Author Name</label>
+                          <input
+                            type="text"
+                            value={compiledAuthor}
+                            onChange={(e) => {
+                              const newAuthor = e.target.value;
+                              setCodeText((prev) => {
+                                const updated = prev.includes("\\author{")
+                                  ? prev.replace(/\\author\{[^}]*\}/, `\\author{${newAuthor}}`)
+                                  : `\\author{${newAuthor}}\n` + prev;
+                                codeTextRef.current = updated;
+                                return updated;
+                              });
+                            }}
+                            className="w-full bg-[#111724] border border-[#263750] rounded px-3 py-1.5 text-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-slate-400 mb-1">Introduction Section</label>
+                          <textarea
+                            rows={6}
+                            value={compiledIntro}
+                            onChange={(e) => {
+                              const newIntro = e.target.value;
+                              setCodeText((prev) => {
+                                const updated = prev.replace(/\\section\*?\{[^}]*\}[\s\S]*?(?=\\section|\\end\{document\}|$)/i, `\\section*{Introduction}\n${newIntro}\n\n`);
+                                codeTextRef.current = updated;
+                                return updated;
+                              });
+                            }}
+                            className="w-full bg-[#111724] border border-[#263750] rounded px-3 py-2 text-white focus:outline-none focus:border-emerald-500 leading-relaxed font-sans"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
+            </main>
+          )}
 
-              {/* View Controls & Zoom Controls matching Image 2 */}
-              <div className="flex items-center gap-3 text-slate-400">
-                <div className="flex items-center gap-1 bg-[#0d131f] border border-[#26354b] rounded px-2 py-0.5 text-[11px]">
-                  <span>1 / 1</span>
-                </div>
-
-                <div className="flex items-center gap-1 bg-[#0d131f] border border-[#26354b] rounded px-1.5 py-0.5">
-                  <button
-                    onClick={() => setZoom((z) => Math.max(z - 0.1, 0.3))}
-                    className="hover:text-white px-1"
-                  >
-                    -
-                  </button>
-                  <span className="text-[11px] w-8 text-center text-slate-200 font-mono">
-                    {Math.round(zoom * 100)}%
-                  </span>
-                  <button
-                    onClick={() => setZoom((z) => Math.min(z + 0.1, 1.2))}
-                    className="hover:text-white px-1"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Live Compiler Preview Canvas */}
-            <div className="flex-1 overflow-auto p-6 flex justify-center items-start bg-[#1a2332]">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                style={{ transform: `scale(${zoom})`, transformOrigin: "top center" }}
-                className="bg-white rounded shadow-2xl text-slate-900 transition-all min-h-[1100px] w-[800px] overflow-hidden"
-              >
-                <SelectedTemplateComponent data={data} isEditing={false} />
-              </motion.div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ----------------- 3. FOOTER ACTION BAR ----------------- */}
-      <footer className="h-10 bg-[#121927] border-t border-[#233045] px-4 flex items-center justify-between shrink-0 text-xs text-slate-400">
-        <div className="flex items-center gap-3">
-          <button onClick={onBack} className="hover:text-slate-200 transition-colors flex items-center gap-1">
-            <ArrowRight className="h-3.5 w-3.5 rotate-180" />
-            <span>Back</span>
-          </button>
-          <span>•</span>
-          <span>VitaForge Compiler Engine v2.4</span>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Button
-            onClick={onNext}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold h-7 px-4 text-xs shadow-sm flex items-center gap-1.5"
-          >
-            <span>Proceed to Preview & Export</span>
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      </footer>
-    </div>
-  );
-}
-
-// --- Sub-Components ---
-
-function PersonalForm({ data, updateInfo, onChange }: any) {
-  return (
-    <div className="space-y-4 text-slate-200">
-      <div className="grid grid-cols-12 gap-3">
-        <div className="col-span-12 md:col-span-8 space-y-1">
-          <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Full Name</Label>
-          <Input
-            value={data.personalInfo.fullName}
-            onChange={(e) => updateInfo("fullName", e.target.value)}
-            className="bg-[#1c283c] border-[#2b3a52] text-white h-9 text-sm"
-            placeholder="e.g. John Doe"
-          />
-        </div>
-        <div className="col-span-12 md:col-span-4 space-y-1">
-          <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Job Title</Label>
-          <Input
-            value={data.personalInfo.title || ""}
-            onChange={(e) => updateInfo("title", e.target.value)}
-            className="bg-[#1c283c] border-[#2b3a52] text-white h-9 text-sm"
-            placeholder="e.g. Product Designer"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Email</Label>
-          <Input
-            value={data.personalInfo.email}
-            onChange={(e) => updateInfo("email", e.target.value)}
-            className="bg-[#1c283c] border-[#2b3a52] text-white h-9 text-sm"
-          />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Phone</Label>
-          <Input
-            value={data.personalInfo.phone}
-            onChange={(e) => updateInfo("phone", e.target.value)}
-            className="bg-[#1c283c] border-[#2b3a52] text-white h-9 text-sm"
-          />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">LinkedIn</Label>
-          <Input
-            value={data.personalInfo.linkedin}
-            onChange={(e) => updateInfo("linkedin", e.target.value)}
-            className="bg-[#1c283c] border-[#2b3a52] text-white h-9 text-sm"
-          />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">GitHub</Label>
-          <Input
-            value={data.personalInfo.github || ""}
-            onChange={(e) => updateInfo("github", e.target.value)}
-            className="bg-[#1c283c] border-[#2b3a52] text-white h-9 text-sm"
-          />
-        </div>
-      </div>
-
-      <div className="space-y-1 pt-2">
-        <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Professional Summary</Label>
-        <Textarea
-          value={data.summary || ""}
-          onChange={(e) => onChange({ summary: e.target.value })}
-          className="bg-[#1c283c] border-[#2b3a52] text-white min-h-[100px] text-xs resize-none leading-relaxed"
-          placeholder="Brief summary of your professional background..."
-        />
-      </div>
-    </div>
-  );
-}
-
-function SkillsForm({ data, onChange }: { data: string; onChange: (val: string) => void }) {
-  return (
-    <div className="space-y-3">
-      <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Skills List</Label>
-      <Textarea
-        value={data}
-        onChange={(e) => onChange(e.target.value)}
-        className="bg-[#1c283c] border-[#2b3a52] text-white min-h-[120px] text-xs leading-relaxed"
-        placeholder="e.g. React, TypeScript, Node.js, Next.js, Python, TailwindCSS"
-      />
-    </div>
-  );
-}
-
-function ListEditor({ items = [], onChange, type }: { items: any[]; onChange: (items: any[]) => void; type: string }) {
-  const addItem = () => {
-    const newItem = { id: `item-${Date.now()}`, role: "", company: "", duration: "", description: "" };
-    onChange([...items, newItem]);
-  };
-
-  const removeItem = (id: string) => {
-    onChange(items.filter((i) => i.id !== id));
-  };
-
-  const updateItem = (id: string, field: string, value: string) => {
-    onChange(items.map((i) => (i.id === id ? { ...i, [field]: value } : i)));
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <span className="text-xs font-bold uppercase tracking-wider text-slate-400">{type} Entries</span>
-        <Button onClick={addItem} size="sm" className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs h-7">
-          <Plus className="h-3 w-3 mr-1" /> Add Entry
-        </Button>
-      </div>
-
-      <div className="space-y-3">
-        {items.map((item, index) => (
-          <div key={item.id || index} className="p-3 bg-[#1c283c] border border-[#2b3a52] rounded-lg space-y-2 relative">
-            <button
-              onClick={() => removeItem(item.id)}
-              className="absolute top-2 right-2 text-slate-400 hover:text-red-400 p-1"
+          {/* ----- CENTER RESIZER SPLITTER ----- */}
+          {(layoutMode === "split") && (
+            <div
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setIsDraggingSplitter(true);
+              }}
+              onDoubleClick={() => setSplitRatio(50)}
+              title="Drag left/right to resize panes (Double-click to reset 50/50)"
+              className={`w-2.5 bg-[#121927] border-x border-[#233045] flex items-center justify-center cursor-col-resize hover:bg-emerald-600/40 transition-colors relative z-20 select-none shrink-0 ${
+                isDraggingSplitter ? "bg-emerald-600/60" : ""
+              }`}
             >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-            <div className="grid grid-cols-2 gap-2 pr-6">
-              <Input
-                value={item.role || item.title || item.degree || item.name || ""}
-                onChange={(e) => updateItem(item.id, item.role ? "role" : item.degree ? "degree" : "name", e.target.value)}
-                placeholder="Title / Role / Degree"
-                className="bg-[#121927] border-[#2b3a52] text-white text-xs h-8"
-              />
-              <Input
-                value={item.company || item.school || ""}
-                onChange={(e) => updateItem(item.id, item.company ? "company" : "school", e.target.value)}
-                placeholder="Company / School"
-                className="bg-[#121927] border-[#2b3a52] text-white text-xs h-8"
-              />
+              <div
+                className={`bg-[#1b2536] border border-[#2b3a50] rounded-sm py-1.5 px-0.5 text-[8px] flex flex-col items-center shadow-md transition-colors ${
+                  isDraggingSplitter ? "text-emerald-300 border-emerald-500" : "text-slate-400"
+                }`}
+              >
+                <span>‹</span>
+                <span>›</span>
+              </div>
             </div>
-            <Textarea
-              value={item.description || ""}
-              onChange={(e) => updateItem(item.id, "description", e.target.value)}
-              placeholder="Description or bullet points..."
-              className="bg-[#121927] border-[#2b3a52] text-white text-xs h-16 resize-none"
-            />
-          </div>
-        ))}
+          )}
+
+          {/* ----- RIGHT PANE (Live Compiler Output & PDF Preview) ----- */}
+          {(layoutMode === "split" || layoutMode === "preview") && (
+            <div
+              style={layoutMode === "split" ? { width: `calc(${100 - splitRatio}% - 10px)`, flex: "none" } : { flex: 1 }}
+              className="bg-[#1a2332] flex flex-col min-w-0 h-full overflow-hidden relative"
+            >
+              {/* Compiler Header Controls Bar */}
+              <div className="h-9 bg-[#121927] border-b border-[#233045] px-3 flex items-center justify-between text-xs shrink-0">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleRecompile}
+                    disabled={isCompiling}
+                    className="bg-[#16a34a] hover:bg-[#15803d] text-white px-3 py-1 rounded font-bold flex items-center gap-1.5 shadow-md transition-all active:scale-95 text-xs cursor-pointer"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${isCompiling ? "animate-spin" : ""}`} />
+                    <span>{isCompiling ? "Compiling..." : "Recompile"}</span>
+                    <ChevronDown className="h-3 w-3 opacity-70" />
+                  </button>
+
+                  <button
+                    onClick={() => setShowLogModal(true)}
+                    title={compileError ? "Compiler Error (Click to view log)" : "View Compiler Logs"}
+                    className={`p-1.5 rounded transition-colors cursor-pointer ${
+                      compileError
+                        ? "bg-red-900/70 text-red-200 hover:bg-red-800 hover:text-white"
+                        : "bg-[#1c283c] hover:bg-[#25344d] text-slate-300 hover:text-white"
+                    }`}
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                  </button>
+
+                  <button
+                    onClick={handleDownload}
+                    title="Download PDF"
+                    className="p-1.5 rounded bg-[#1c283c] hover:bg-[#25344d] text-slate-300 hover:text-white transition-colors cursor-pointer"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                  </button>
+
+                  {/* Template Mode Switch */}
+                  <button
+                    onClick={() => setPreviewModeType(previewModeType === "article" ? "resume" : "article")}
+                    className="px-2 py-0.5 bg-[#1c283c] hover:bg-[#25344d] text-slate-300 rounded text-[11px] border border-[#2b3c54] cursor-pointer"
+                  >
+                    {previewModeType === "article" ? "LaTeX PDF View" : "Resume View"}
+                  </button>
+                </div>
+
+                {/* Zoom & Page Count */}
+                <div className="flex items-center gap-3 text-slate-400">
+                  <div className="flex items-center gap-1 bg-[#0d131f] border border-[#26354b] rounded px-1.5 py-0.5">
+                    <button
+                      onClick={() => setZoom((z) => Math.max(Number((z - 0.1).toFixed(2)), 0.4))}
+                      className="hover:text-white px-1 font-bold cursor-pointer"
+                    >
+                      -
+                    </button>
+                    <span className="text-[11px] w-8 text-center text-slate-200 font-mono">
+                      {Math.round(zoom * 100)}%
+                    </span>
+                    <button
+                      onClick={() => setZoom((z) => Math.min(Number((z + 0.1).toFixed(2)), 1.5))}
+                      className="hover:text-white px-1 font-bold cursor-pointer"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Compiler Preview Canvas */}
+              <div className="flex-1 min-h-0 relative flex flex-col">
+                {previewModeType === "article" ? (
+                  <UniversalLatexCompiler
+                    key={recompileTrigger}
+                    latexCode={codeText}
+                    zoom={zoom}
+                    onRecompile={handleRecompile}
+                    onCompileStart={() => {
+                      setIsCompiling(true);
+                      setCompileError(null);
+                    }}
+                    onCompileSuccess={(result) => {
+                      setIsCompiling(false);
+                      setCompileError(null);
+                      setCompileLog(result.log || null);
+                      if (result.pdfBlob) setPdfBlob(result.pdfBlob);
+                      if (result.pdfUrl) setPdfUrl(result.pdfUrl);
+                    }}
+                    onCompileError={(err, log) => {
+                      setIsCompiling(false);
+                      setCompileError(err);
+                      setCompileLog(log);
+                    }}
+                    onClearError={() => setCompileError(null)}
+                  />
+                ) : (
+                  /* Rich Resume Template Render */
+                  <div className="flex-1 overflow-auto p-8 flex justify-center items-start bg-[#242f3d]">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      style={{ transform: `scale(${zoom})`, transformOrigin: "top center" }}
+                      className="bg-white rounded shadow-2xl text-slate-900 transition-all min-h-[1100px] w-[800px] overflow-hidden"
+                    >
+                      <SelectedTemplateComponent data={data} isEditing={false} />
+                    </motion.div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Compiler Logs Modal */}
+      <AnimatePresence>
+        {showLogModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center z-50 p-6"
+          >
+            <div className="bg-[#121927] border border-[#2b3c54] rounded-xl w-full max-w-3xl max-h-[80vh] flex flex-col shadow-2xl overflow-hidden">
+              <div className="bg-[#182233] px-4 py-3 border-b border-[#2b3c54] flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2 font-mono text-slate-200">
+                  <Terminal className="w-4 h-4 text-emerald-400" />
+                  <span>LaTeX Compiler Logs</span>
+                </div>
+                <button
+                  onClick={() => setShowLogModal(false)}
+                  className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-700/40 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="p-4 overflow-auto bg-[#0a0e17] font-mono text-xs text-slate-300 select-text leading-relaxed whitespace-pre-wrap max-h-[60vh]">
+                {compileLog || "No compiler logs recorded yet. Click Recompile to compile your document."}
+              </div>
+              <div className="px-4 py-2.5 bg-[#182233] border-t border-[#2b3c54] flex justify-end">
+                <button
+                  onClick={() => setShowLogModal(false)}
+                  className="px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

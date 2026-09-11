@@ -44,7 +44,99 @@ export default function App() {
   const [savedResumes, setSavedResumes] = useState<SavedResume[]>(() => {
     try {
       const saved = localStorage.getItem("saved_resumes");
-      return saved ? JSON.parse(saved) : [];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      // Defaults matching Image 1
+      return [
+        {
+          id: "project-graphic-designer",
+          title: "Graphic Designer",
+          updatedAt: new Date().toISOString(),
+          score: 85,
+          data: {
+            jdText: "",
+            personalInfo: {
+              fullName: "R Karthik",
+              title: "Graphic Designer",
+              email: "henry@example.com",
+              phone: "+1 (555) 234-5678",
+              location: "New York, NY",
+              website: "myportfolio.com",
+              linkedin: "linkedin.com/in/user",
+              github: "github.com/user"
+            },
+            summary: "Creative professional with experience in building high quality applications and visual brand identities.",
+            skills: "React, TypeScript, Node.js, Next.js, Figma, UI/UX Design",
+            experience: [
+              {
+                id: "exp-1",
+                role: "Senior Graphic Designer",
+                company: "Design Studio",
+                duration: "2021 - Present",
+                location: "New York, NY",
+                description: "Led visual identity projects and brand design systems."
+              }
+            ],
+            education: [
+              {
+                id: "edu-1",
+                school: "Art & Design Institute",
+                degree: "B.F.A. in Graphic Design",
+                year: "2017 - 2021",
+                location: "New York, NY"
+              }
+            ],
+            projects: [],
+            certifications: [],
+            achievements: []
+          }
+        },
+        {
+          id: "project-frontend-dev",
+          title: "frontend developer",
+          updatedAt: new Date().toISOString(),
+          score: 92,
+          data: {
+            jdText: "",
+            personalInfo: {
+              fullName: "R Karthik",
+              title: "frontend developer",
+              email: "karthik@example.com",
+              phone: "+1 (555) 234-5678",
+              location: "San Francisco, CA",
+              website: "karthikdev.com",
+              linkedin: "linkedin.com/in/karthik",
+              github: "github.com/karthikdev"
+            },
+            summary: "Passionate Frontend Developer specialized in React, TypeScript, and modern web applications.",
+            skills: "React, TypeScript, Next.js, Tailwind CSS, JavaScript, HTML5, CSS3, Git",
+            experience: [
+              {
+                id: "exp-2",
+                role: "Frontend Engineer",
+                company: "Tech Systems",
+                duration: "2022 - Present",
+                location: "Remote",
+                description: "Developing scalable responsive web applications using React and TypeScript."
+              }
+            ],
+            education: [
+              {
+                id: "edu-2",
+                school: "University of Technology",
+                degree: "B.S. in Computer Science",
+                year: "2018 - 2022",
+                location: "San Francisco, CA"
+              }
+            ],
+            projects: [],
+            certifications: [],
+            achievements: []
+          }
+        }
+      ];
     } catch {
       return [];
     }
@@ -143,7 +235,7 @@ export default function App() {
 
   const handleEditResume = (resume: SavedResume) => {
     setCurrentResume(resume);
-    setBuilderStep(3); // Jump directly to Resume Preview (Step 3)
+    setBuilderStep(2); // Jump directly to Overleaf LaTeX Editor (Step 2)
     setView("BUILDER");
   };
 
@@ -204,7 +296,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-900 font-sans text-slate-900 selection:bg-emerald-500 selection:text-white">
-      {view !== "DASHBOARD" && (
+      {view !== "DASHBOARD" && view !== "BUILDER" && (
         <Navbar
           user={user}
           onViewChange={setView}
@@ -217,7 +309,7 @@ export default function App() {
         />
       )}
 
-      <main className={view === "DASHBOARD" ? "min-h-screen" : "pt-16 min-h-[calc(100vh-4rem)]"}>
+      <main className={view === "DASHBOARD" || view === "BUILDER" ? "h-screen w-screen overflow-hidden" : "pt-16 min-h-[calc(100vh-4rem)]"}>
         <AnimatePresence mode="wait">
           {view === "LANDING" && (
             <LandingPage key="landing" onGetStarted={() => setView(user ? "DASHBOARD" : "AUTH")} />

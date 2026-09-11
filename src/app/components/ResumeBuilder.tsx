@@ -261,7 +261,7 @@ export function ResumeBuilder({
   };
 
   return (
-    <div className="flex flex-col h-full min-h-screen bg-slate-50">
+    <div className={`flex flex-col h-full ${step === 2 ? 'h-screen w-screen overflow-hidden bg-[#0c1017]' : 'min-h-screen bg-slate-50'}`}>
 
       {/* Analysis Overlay - Shows when analyzing */}
       <AnimatePresence>
@@ -269,7 +269,7 @@ export function ResumeBuilder({
       </AnimatePresence>
 
       {/* Main Content Area */}
-      <main className={`flex-1 ${step === 1 ? 'container mx-auto px-4 py-8 max-w-5xl' : 'w-full'}`}>
+      <main className={`flex-1 ${step === 1 ? 'container mx-auto px-4 py-8 max-w-5xl' : 'w-full h-full'}`}>
         <AnimatePresence mode="wait">
           {step === 1 && (
             <Step1JD
@@ -287,7 +287,8 @@ export function ResumeBuilder({
               data={data}
               onChange={updateData}
               onNext={handleNext}
-              onBack={() => setStep(1)}
+              onBack={onBack}
+              projectTitle={propInitialData?.personalInfo?.title || data.personalInfo?.title || ""}
             />
           )}
           {step === 3 && (
