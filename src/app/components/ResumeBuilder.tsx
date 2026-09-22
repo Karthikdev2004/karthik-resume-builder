@@ -285,10 +285,23 @@ export function ResumeBuilder({
             <Step2Profile
               key="step2"
               data={data}
-              onChange={updateData}
+              onChange={(newData) => {
+                const merged = { ...data, ...newData };
+                setData(merged);
+                if (onSaveRef.current) {
+                  onSaveRef.current(merged);
+                }
+              }}
               onNext={handleNext}
-              onBack={onBack}
+              onBack={() => {
+                if (onSaveRef.current) {
+                  onSaveRef.current(data);
+                }
+                onBack();
+              }}
               projectTitle={propInitialData?.personalInfo?.title || data.personalInfo?.title || ""}
+              onUpgrade={() => onShowCheckout(true)}
+              isPremium={isPremiumProp}
             />
           )}
           {step === 3 && (

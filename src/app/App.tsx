@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/app/components/ui";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -23,9 +24,6 @@ import { cn } from "@/lib/utils";
 import { VFLogo } from "@/app/components/VFLogo";
 import { LandingPage } from "@/app/components/LandingPage";
 import { AuthPage } from "@/app/components/AuthPage";
-// Define SavedResume type locally or import if I moved it to types
-// Ideally import from Dashboard but circular deps might be annoying if simplified.
-// Let's import SavedResume from Dashboard since I exported it there, or just redefine compatible usage.
 import { Dashboard, SavedResume } from "@/app/components/Dashboard";
 import { ResumeBuilder } from "@/app/components/ResumeBuilder";
 import { ResumeData } from "@/app/types";
@@ -33,8 +31,18 @@ import { ResumeData } from "@/app/types";
 export type View = "LANDING" | "AUTH" | "DASHBOARD" | "BUILDER";
 
 export default function App() {
-  const [view, setView] = useState<View>("LANDING");
-  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const [user, setUser] = useState<{ name: string; email: string } | null>(() => {
+    try {
+      const savedUser = localStorage.getItem("resume_builder_user");
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      return null;
+    }
+  });
+
   const [builderStep, setBuilderStep] = useState(1);
   const [initialMode, setInitialMode] = useState<'selection' | 'upload_only' | 'target_job'>('selection');
   const [isPremium, setIsPremium] = useState(false);
@@ -149,75 +157,72 @@ export default function App() {
     localStorage.setItem("saved_resumes", JSON.stringify(savedResumes));
   }, [savedResumes]);
 
-  // Check Session
-  useEffect(() => {
-    const savedUser = localStorage.getItem("resume_builder_user");
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-      setView("DASHBOARD");
-    }
-  }, []);
-
   const handleLogin = (userData: { name: string; email: string }) => {
     setUser(userData);
     localStorage.setItem("resume_builder_user", JSON.stringify(userData));
-    setView("DASHBOARD");
+    navigate("/projects");
   };
 
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem("resume_builder_user");
-    setView("LANDING");
+    navigate("/");
+  };
+
+  const handleUpdateUser = (userData: { name: string; email: string }) => {
+    setUser(userData);
+    localStorage.setItem("resume_builder_user", JSON.stringify(userData));
   };
 
   const handleBackToDashboard = () => {
-    setView("DASHBOARD");
     setBuilderStep(1);
-    setCurrentResume(null); // Clear selection
+    setCurrentResume(null);
     setInitialMode('selection');
+    navigate("/projects");
   };
 
   // Resume Handlers
-  const handleNewResume = (mode: 'scratch' | 'upload' | 'target' = 'scratch', projectTitle?: string) => {
-    localStorage.removeItem("resume_draft"); // Clear leftover draft
+  const handleNewResume = (mode: 'scratch' | 'upload' | 'target' = 'scratch', projectTitle?: string, templateId?: any) => {
+    localStorage.removeItem("resume_draft");
 
-    if (projectTitle && projectTitle.trim().length > 0) {
-      const title = projectTitle.trim();
-      const newResume: SavedResume = {
-        id: Date.now().toString(),
-        title: title,
-        updatedAt: new Date().toISOString(),
-        score: 75,
-        data: {
-          personalInfo: {
-            fullName: "",
-            email: "",
-            phone: "",
-            location: "",
-            website: "",
-            linkedin: "",
-            github: "",
-            title: title
-          },
-          summary: "",
-          experience: [],
-          education: [],
-          skills: [],
-          projects: [],
-          certifications: [],
-          languages: [],
-          interests: []
-        }
-      };
-      setCurrentResume(newResume);
-    } else {
-      setCurrentResume(null); // Start fresh
-    }
+    const title = projectTitle && projectTitle.trim().length > 0 ? projectTitle.trim() : "Untitled Resume";
+    const newResume: SavedResume = {
+      id: Date.now().toString(),
+      title: title,
+      updatedAt: new Date().toISOString(),
+      score: 75,
+      isArchived: false,
+      isTrash: false,
+      isShared: false,
+      data: {
+        jdText: "",
+        personalInfo: {
+          fullName: user?.name || "R Karthik",
+          email: user?.email || "henry@example.com",
+          phone: "+1 (555) 234-5678",
+          location: "New York, NY",
+          website: "",
+          linkedin: "",
+          github: "",
+          title: title
+        },
+        summary: "",
+        experience: [],
+        education: [],
+        skills: "",
+        projects: [],
+        certifications: [],
+        achievements: [],
+        template: templateId || "classic"
+      }
+    };
+    setCurrentResume(newResume);
+    // Immediately persist newly created project into savedResumes so it is never lost
+    setSavedResumes((prev) => [newResume, ...prev]);
 
     if (mode === 'scratch') {
-      // Skip directly to editor (Step 2)
       setBuilderStep(2);
-      setInitialMode('selection'); // Default
+      setInitialMode('selection');
     } else if (mode === 'upload') {
       setBuilderStep(1);
       setInitialMode('upload_only');
@@ -225,18 +230,17 @@ export default function App() {
       setBuilderStep(1);
       setInitialMode('target_job');
     } else {
-      // Fallback
       setBuilderStep(1);
       setInitialMode('selection');
     }
 
-    setView("BUILDER");
+    navigate("/builder");
   };
 
   const handleEditResume = (resume: SavedResume) => {
     setCurrentResume(resume);
-    setBuilderStep(2); // Jump directly to Overleaf LaTeX Editor (Step 2)
-    setView("BUILDER");
+    setBuilderStep(2);
+    navigate("/builder");
   };
 
   const handleSaveResume = (data: ResumeData) => {
@@ -244,64 +248,133 @@ export default function App() {
     let newResume: SavedResume;
 
     if (currentResume) {
-      // Update existing
       newResume = {
         ...currentResume,
-        title: data.personalInfo.title || currentResume.title || "Untitled Resume",
+        title: data.personalInfo?.title || currentResume.title || "Untitled Resume",
         updatedAt: now,
         data: data,
-        // Calculate a mock score for now until we have real scoring stored
         score: Math.round(Math.random() * 30 + 60)
       };
 
-      setSavedResumes(prev => prev.map(r => r.id === newResume.id ? newResume : r));
+      setSavedResumes((prev) => {
+        const index = prev.findIndex((r) => r.id === newResume.id);
+        if (index >= 0) {
+          const updated = [...prev];
+          updated[index] = newResume;
+          return updated;
+        }
+        return [newResume, ...prev];
+      });
     } else {
-      // Create new
-      // Check if data is essentially empty
       const hasName = data.personalInfo?.fullName?.trim().length > 0;
       const hasSummary = data.summary?.trim().length > 0;
       const hasExperience = data.experience?.length > 0;
       const hasEducation = data.education?.length > 0;
-      const hasSkills = data.skills?.length > 0;
-      const isUntitled = !data.personalInfo.title || data.personalInfo.title === "Untitled Resume";
+      const hasSkills = typeof data.skills === 'string' ? data.skills.length > 0 : false;
+      const hasLatex = typeof data.latexCode === 'string' && data.latexCode.trim().length > 0;
+      const isUntitled = !data.personalInfo?.title || data.personalInfo.title === "Untitled Resume";
 
-      // Only create if there is some content
-      if (!hasName && !hasSummary && !hasExperience && !hasEducation && !hasSkills && isUntitled) {
-        return; // Don't save empty drafts
+      if (!hasName && !hasSummary && !hasExperience && !hasEducation && !hasSkills && !hasLatex && isUntitled) {
+        return;
       }
 
       newResume = {
         id: crypto.randomUUID(),
-        title: data.personalInfo.title || "Untitled Resume",
+        title: data.personalInfo?.title || "Untitled Resume",
         updatedAt: now,
+        isArchived: false,
+        isTrash: false,
+        isShared: false,
         data: data,
         score: Math.round(Math.random() * 30 + 50)
       };
-      setSavedResumes(prev => [newResume, ...prev]);
+      setSavedResumes((prev) => [newResume, ...prev]);
     }
 
-    // Update current context so subsequent saves update this one
     setCurrentResume(newResume);
   };
 
-  const handleDeleteResume = (id: string) => {
-    setSavedResumes((current) => current.filter((r) => r.id !== id));
-    // If the deleted resume was currently selected/editing, clear it
+  // Move to Trash (Soft Delete)
+  const handleTrashResume = (id: string) => {
+    setSavedResumes((current) =>
+      current.map((r) =>
+        r.id === id ? { ...r, isTrash: true, deletedAt: new Date().toISOString() } : r
+      )
+    );
     if (currentResume?.id === id) {
       setCurrentResume(null);
-      setBuilderStep(1);
-      setView("DASHBOARD");
     }
   };
 
+  // Restore from Trash or Archive
+  const handleRestoreResume = (id: string) => {
+    setSavedResumes((current) =>
+      current.map((r) =>
+        r.id === id ? { ...r, isTrash: false, isArchived: false } : r
+      )
+    );
+  };
+
+  // Archive project
+  const handleArchiveResume = (id: string) => {
+    setSavedResumes((current) =>
+      current.map((r) =>
+        r.id === id ? { ...r, isArchived: true } : r
+      )
+    );
+  };
+
+  // Permanent Delete
+  const handlePermanentDelete = (id: string) => {
+    setSavedResumes((current) => current.filter((r) => r.id !== id));
+    if (currentResume?.id === id) {
+      setCurrentResume(null);
+    }
+  };
+
+  // Empty Trash
+  const handleEmptyTrash = () => {
+    setSavedResumes((current) => current.filter((r) => !r.isTrash));
+  };
+
+  const isDashboardRoute = [
+    "/projects",
+    "/shared",
+    "/archived",
+    "/library",
+    "/trash",
+    "/help",
+    "/account"
+  ].some((p) => location.pathname === p || location.pathname.startsWith(p + "/"));
+
+  const isBuilderRoute = location.pathname.startsWith("/builder");
+
+  const dashboardProps = {
+    resumes: savedResumes,
+    user,
+    onUpdateUser: handleUpdateUser,
+    onNewResume: handleNewResume,
+    onEditResume: handleEditResume,
+    onDeleteResume: handleTrashResume,
+    onRestoreResume: handleRestoreResume,
+    onPermanentDelete: handlePermanentDelete,
+    onArchiveResume: handleArchiveResume,
+    onEmptyTrash: handleEmptyTrash,
+    onLogout: handleLogout,
+  };
+
   return (
-    <div className="min-h-screen bg-slate-900 font-sans text-slate-900 selection:bg-emerald-500 selection:text-white">
-      {view !== "DASHBOARD" && view !== "BUILDER" && (
+    <div className={isDashboardRoute || isBuilderRoute ? "h-screen w-screen overflow-hidden bg-[#111622] font-sans" : "min-h-screen bg-slate-900 font-sans text-slate-900 selection:bg-emerald-500 selection:text-white"}>
+      {!isDashboardRoute && !isBuilderRoute && (
         <Navbar
           user={user}
-          onViewChange={setView}
+          onViewChange={(v) => {
+            if (v === "DASHBOARD") navigate("/projects");
+            else if (v === "AUTH") navigate("/auth");
+            else navigate("/");
+          }}
           onLogout={handleLogout}
-          currentView={view}
+          currentView={location.pathname === "/auth" ? "AUTH" : "LANDING"}
           builderStep={builderStep}
           isPremium={isPremium}
           onBackToDashboard={handleBackToDashboard}
@@ -309,39 +382,58 @@ export default function App() {
         />
       )}
 
-      <main className={view === "DASHBOARD" || view === "BUILDER" ? "h-screen w-screen overflow-hidden" : "pt-16 min-h-[calc(100vh-4rem)]"}>
-        <AnimatePresence mode="wait">
-          {view === "LANDING" && (
-            <LandingPage key="landing" onGetStarted={() => setView(user ? "DASHBOARD" : "AUTH")} />
-          )}
-          {view === "AUTH" && (
-            <AuthPage key="auth" onLogin={handleLogin} />
-          )}
-          {view === "DASHBOARD" && (
-            <Dashboard
-              key="dashboard"
-              resumes={savedResumes}
-              onNewResume={handleNewResume}
-              onEditResume={handleEditResume}
-              onDeleteResume={handleDeleteResume}
-            />
-          )}
-          {view === "BUILDER" && (
-            <ResumeBuilder
-              key="builder"
-              initialData={currentResume?.data} // Pass loaded data
-              initialStep={builderStep}
-              onBack={handleBackToDashboard}
-              onStepChange={setBuilderStep}
-              onSave={handleSaveResume} // Pass save handler
-              isPremium={isPremium}
-              onPremiumChange={setIsPremium}
-              showCheckout={showCheckout}
-              onShowCheckout={setShowCheckout}
-              initialMode={initialMode}
-            />
-          )}
-        </AnimatePresence>
+      <main className={isDashboardRoute || isBuilderRoute ? "h-full w-full overflow-hidden" : "pt-16 min-h-[calc(100vh-4rem)]"}>
+        <Routes>
+          {/* Landing Page */}
+          <Route
+            path="/"
+            element={
+              user ? (
+                <Navigate to="/projects" replace />
+              ) : (
+                <LandingPage onGetStarted={() => navigate(user ? "/projects" : "/auth")} />
+              )
+            }
+          />
+
+          {/* Auth Page */}
+          <Route
+            path="/auth"
+            element={<AuthPage onLogin={handleLogin} />}
+          />
+
+          {/* Dashboard Routes for all 8 Sidebar Items */}
+          <Route path="/projects" element={<Dashboard {...dashboardProps} tab="your" />} />
+          <Route path="/shared" element={<Dashboard {...dashboardProps} tab="shared" />} />
+          <Route path="/archived" element={<Dashboard {...dashboardProps} tab="archived" />} />
+          <Route path="/library" element={<Dashboard {...dashboardProps} tab="library" />} />
+          <Route path="/trash" element={<Dashboard {...dashboardProps} tab="trash" />} />
+          <Route path="/help" element={<Dashboard {...dashboardProps} tab="help" />} />
+          <Route path="/account" element={<Dashboard {...dashboardProps} tab="account" />} />
+
+          {/* Resume Builder */}
+          <Route
+            path="/builder"
+            element={
+              <ResumeBuilder
+                key={currentResume?.id || "builder-instance"}
+                initialData={currentResume?.data}
+                initialStep={builderStep}
+                onBack={handleBackToDashboard}
+                onStepChange={setBuilderStep}
+                onSave={handleSaveResume}
+                isPremium={isPremium}
+                onPremiumChange={setIsPremium}
+                showCheckout={showCheckout}
+                onShowCheckout={setShowCheckout}
+                initialMode={initialMode}
+              />
+            }
+          />
+
+          {/* Catch-all */}
+          <Route path="*" element={<Navigate to={user ? "/projects" : "/"} replace />} />
+        </Routes>
       </main>
     </div>
   );

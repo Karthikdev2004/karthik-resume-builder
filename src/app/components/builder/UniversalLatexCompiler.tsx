@@ -6,13 +6,17 @@ import { compileLatex, resolveLatexImports, revokePdfUrl, extractLatexErrorMessa
 export { compileLatex, resolveLatexImports, revokePdfUrl, extractLatexErrorMessage };
 export type { CompileResult };
 
+import type { ProjectFile } from '@/lib/projectState';
+
 export interface UniversalLatexCompilerProps {
   latexCode: string;
+  projectFiles?: ProjectFile[];
   pdfUrl?: string | null;
   isCompiling?: boolean;
   error?: string | null;
   log?: string | null;
   zoom?: number;
+  onSyncToCode?: (text: string) => void;
   onRecompile?: () => void;
   onDownload?: () => void;
   onClearError?: () => void;
@@ -23,11 +27,13 @@ export interface UniversalLatexCompilerProps {
 
 export const UniversalLatexCompiler: React.FC<UniversalLatexCompilerProps> = ({
   latexCode,
+  projectFiles,
   pdfUrl: propPdfUrl,
   isCompiling: propIsCompiling,
   error: propError,
   log: propLog,
   zoom = 1,
+  onSyncToCode,
   onRecompile,
   onDownload,
   onClearError,
@@ -41,6 +47,17 @@ export const UniversalLatexCompiler: React.FC<UniversalLatexCompilerProps> = ({
   const [localPdfUrl, setLocalPdfUrl] = useState<string | null>(propPdfUrl || null);
   const [showFullLog, setShowFullLog] = useState<boolean>(false);
 
+  // SyncTeX Interactive Canvas Viewer state
+  const [useInteractiveViewer, setUseInteractiveViewer] = useState<boolean>(true);
+  const [renderCanvasReady, setRenderCanvasReady] = useState<boolean>(false);
+  const [clickPin, setClickPin] = useState<{ x: number; y: number } | null>(null);
+  const [pdfPageData, setPdfPageData] = useState<{
+    width: number;
+    height: number;
+    textItems: Array<{ str: string; left: number; top: number; width: number; height: number }>;
+  } | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
   const activeBlobUrlRef = useRef<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const downloadFormRef = useRef<HTMLFormElement>(null);
@@ -53,7 +70,7 @@ export const UniversalLatexCompiler: React.FC<UniversalLatexCompilerProps> = ({
   const log = propLog ?? localLog;
   const activePdfUrl = propPdfUrl || localPdfUrl;
 
-  const preparedCode = resolveLatexImports(latexCode);
+  const preparedCode = resolveLatexImports(latexCode, projectFiles);
 
   // Core compilation routine
   const executeCompile = useCallback(async () => {
@@ -80,7 +97,7 @@ export const UniversalLatexCompiler: React.FC<UniversalLatexCompilerProps> = ({
     onCompileStart?.();
 
     try {
-      const result = await compileLatex(preparedCode, controller.signal);
+      const result = await compileLatex(preparedCode, { signal: controller.signal, projectFiles });
       if (result.success && result.pdfUrl) {
         if (activeBlobUrlRef.current) {
           revokePdfUrl(activeBlobUrlRef.current);
@@ -127,6 +144,122 @@ export const UniversalLatexCompiler: React.FC<UniversalLatexCompilerProps> = ({
       }
     };
   }, []);
+
+  // Extract PDF text content positions for 1-to-1 Tap-to-Sync SyncTeX overlay
+  useEffect(() => {
+    if (!activePdfUrl) {
+      setPdfPageData(null);
+      return;
+    }
+    let cancelled = false;
+
+    async function loadPdfTextLayer() {
+      try {
+        const pdfjsLib = await import('pdfjs-dist');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+
+        const res = await fetch(activePdfUrl);
+        const arrayBuf = await res.arrayBuffer();
+        if (cancelled) return;
+
+        const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
+        if (cancelled) return;
+
+        const page = await pdfDoc.getPage(1);
+        if (cancelled) return;
+
+        const baseVp = page.getViewport({ scale: 1 });
+        const targetWidth = 800;
+        const scale = targetWidth / baseVp.width;
+        const displayVp = page.getViewport({ scale });
+
+        const textContent = await page.getTextContent();
+        if (cancelled) return;
+
+        const items: Array<{ str: string; left: number; top: number; width: number; height: number }> = [];
+        for (const item of textContent.items as any[]) {
+          if (!item.str || !item.str.trim()) continue;
+          const tx = item.transform[4];
+          const ty = item.transform[5];
+          const [vx, vy] = displayVp.convertToViewportPoint(tx, ty);
+          const w = item.width * scale;
+          const h = (item.height || 12) * scale;
+          items.push({
+            str: item.str,
+            left: vx,
+            top: vy - h,
+            width: Math.max(w, 10),
+            height: Math.max(h, 14),
+          });
+        }
+
+        setPdfPageData({
+          width: displayVp.width,
+          height: displayVp.height,
+          textItems: items,
+        });
+      } catch (err) {
+        console.warn('SyncTeX text layer extraction note:', err);
+      }
+    }
+
+    loadPdfTextLayer();
+    return () => {
+      cancelled = true;
+    };
+  }, [activePdfUrl]);
+
+  // Click handler on the resume page to locate the text and jump the editor cursor
+  const handleResumePageClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = (e.clientX - rect.left) / zoom;
+    const clickY = (e.clientY - rect.top) / zoom;
+
+    // Show locator pin ripple
+    setClickPin({ x: clickX, y: clickY });
+    setTimeout(() => setClickPin(null), 1200);
+
+    if (!pdfPageData || pdfPageData.textItems.length === 0) {
+      // Fallback: estimate section based on document vertical percentage
+      const ratio = Math.max(0, Math.min(1, clickY / 1130));
+      const secMatches = [...preparedCode.matchAll(/\\(?:section|sectiontitle|cvsection)\*?\{([^}]+)\}/gi)];
+      if (secMatches.length > 0) {
+        const secIndex = Math.min(secMatches.length - 1, Math.floor(ratio * secMatches.length));
+        onSyncToCode?.(secMatches[secIndex][1].trim());
+      }
+      return;
+    }
+
+    // 1. Direct hit on text bounding box
+    const directHit = pdfPageData.textItems.find(
+      (item) =>
+        clickX >= item.left - 4 &&
+        clickX <= item.left + item.width + 4 &&
+        clickY >= item.top - 4 &&
+        clickY <= item.top + item.height + 4
+    );
+
+    if (directHit) {
+      onSyncToCode?.(directHit.str);
+      return;
+    }
+
+    // 2. Nearest row within 30px vertically
+    let closestItem: { str: string; left: number; top: number; width: number; height: number } | null = null;
+    let minDistance = 30;
+    for (const item of pdfPageData.textItems) {
+      const centerY = item.top + item.height / 2;
+      const dist = Math.abs(clickY - centerY);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestItem = item;
+      }
+    }
+
+    if (closestItem) {
+      onSyncToCode?.(closestItem.str);
+    }
+  };
 
   const handleIframeLoaded = () => {
     setLocalCompiling(false);
@@ -310,16 +443,72 @@ export const UniversalLatexCompiler: React.FC<UniversalLatexCompilerProps> = ({
           }}
           className="bg-white rounded shadow-2xl overflow-hidden shrink-0 border border-slate-300/40 relative"
         >
-          {/* Target iframe for both Blob URL preview and direct multipart form responses */}
+          {/* Target iframe for both Blob URL preview and direct multipart form responses - ALWAYS VISIBLE */}
           <iframe
             ref={iframeRef}
             id="latex-preview-frame"
             name="latex-preview-frame"
             src={activePdfUrl ? `${activePdfUrl}#toolbar=0&navpanes=0` : undefined}
             onLoad={handleIframeLoaded}
-            className="w-full h-full border-0 bg-white"
+            className="w-full h-full border-0 bg-white block"
             title="Compiled LaTeX PDF Preview"
           />
+
+          {/* Interactive Transparent Overlay for Tap-to-Sync SyncTeX */}
+          {activePdfUrl && (
+            <div
+              onClick={handleResumePageClick}
+              className="absolute inset-0 z-10 select-none overflow-hidden cursor-crosshair pointer-events-auto"
+              title="Click or tap any text on the resume to jump the editor cursor to that exact line"
+            >
+              {/* Clickable text layer spans positioned over every word/line */}
+              {pdfPageData?.textItems.map((item, idx) => (
+                <span
+                  key={idx}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const rect = e.currentTarget.parentElement?.getBoundingClientRect();
+                    if (rect) {
+                      setClickPin({
+                        x: (e.clientX - rect.left) / zoom,
+                        y: (e.clientY - rect.top) / zoom,
+                      });
+                      setTimeout(() => setClickPin(null), 1200);
+                    }
+                    onSyncToCode?.(item.str);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    left: `${item.left}px`,
+                    top: `${item.top}px`,
+                    width: `${item.width}px`,
+                    height: `${item.height}px`,
+                  }}
+                  title={`Tap to jump cursor to: "${item.str}"`}
+                  className="cursor-pointer hover:bg-emerald-400/20 hover:outline hover:outline-1 hover:outline-emerald-400/60 rounded-xs transition-colors"
+                />
+              ))}
+
+              {/* Interactive Locator Ping Pin */}
+              {clickPin && (
+                <div
+                  style={{ left: `${clickPin.x}px`, top: `${clickPin.y}px` }}
+                  className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none z-30 flex items-center justify-center"
+                >
+                  <span className="relative flex h-8 w-8 items-center justify-center">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500 border-2 border-white shadow-md"></span>
+                  </span>
+                </div>
+              )}
+
+              {/* Floating SyncTeX status badge */}
+              <div className="absolute bottom-3 right-3 bg-[#111724]/90 border border-emerald-500/40 text-emerald-300 px-2.5 py-1 rounded-full text-[10px] font-medium shadow-lg backdrop-blur-xs flex items-center gap-1.5 pointer-events-none">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>Tap any text to jump to code</span>
+              </div>
+            </div>
+          )}
 
           {/* Empty state placeholder when not yet compiled or error occurred with no previous PDF */}
           {!activePdfUrl && !isCompiling && (

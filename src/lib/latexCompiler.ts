@@ -12,13 +12,64 @@ export interface CompileResult {
   log?: string;
 }
 
+import type { ProjectFile } from './projectState';
+
 /**
- * Normalizes and resolves LaTeX imports/inclusions
+ * Normalizes and resolves LaTeX imports/inclusions (\input{}, \include{})
+ * by searching through project files and inlining their contents recursively.
  */
-export function resolveLatexImports(code: string): string {
+export function resolveLatexImports(
+  code: string,
+  projectFiles?: ProjectFile[],
+  visitedPaths = new Set<string>()
+): string {
   if (!code) return '';
+
+  let resolved = code;
+
+  if (projectFiles && projectFiles.length > 0) {
+    // Match \input{filename} and \include{filename}
+    resolved = resolved.replace(
+      /\\(input|include)\{([^}]+)\}/g,
+      (match, command, targetPath) => {
+        let cleanTarget = targetPath.trim();
+        if (!cleanTarget.endsWith('.tex') && !cleanTarget.includes('.')) {
+          cleanTarget += '.tex';
+        }
+
+        // Avoid infinite recursion
+        if (visitedPaths.has(cleanTarget)) {
+          return `% [Circular reference to ${cleanTarget} ignored]`;
+        }
+
+        // Find file by exact path, relative path, or filename
+        const matchedFile = projectFiles.find(
+          (f) =>
+            f.type === 'file' &&
+            (f.path === cleanTarget ||
+              f.name === cleanTarget ||
+              f.path.endsWith('/' + cleanTarget) ||
+              f.name === cleanTarget.replace(/\.tex$/, ''))
+        );
+
+        if (matchedFile && matchedFile.content !== undefined) {
+          const nextVisited = new Set(visitedPaths);
+          nextVisited.add(cleanTarget);
+          const inlinedContent = resolveLatexImports(
+            matchedFile.content,
+            projectFiles,
+            nextVisited
+          );
+          return `% --- Start of inlined ${cleanTarget} ---\n${inlinedContent}\n% --- End of inlined ${cleanTarget} ---`;
+        }
+
+        return match; // Keep original if file not found locally
+      }
+    );
+  }
+
   // Ensure line endings are standard CRLF (\r\n) for TeXLive CGI parser
-  const normalized = code.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const normalized = resolved.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   return normalized.replace(/\n/g, '\r\n');
 }
 
@@ -105,7 +156,7 @@ function isPdfBuffer(buffer: ArrayBuffer): boolean {
  */
 export async function compileLatex(
   latexCode: string,
-  signal?: AbortSignal
+  signalOrOptions?: AbortSignal | { signal?: AbortSignal; projectFiles?: ProjectFile[]; engine?: string }
 ): Promise<CompileResult> {
   if (!latexCode || !latexCode.trim()) {
     return {
@@ -115,15 +166,28 @@ export async function compileLatex(
     };
   }
 
-  const preparedSource = resolveLatexImports(latexCode);
+  const signal = signalOrOptions instanceof AbortSignal ? signalOrOptions : signalOrOptions?.signal;
+  const projectFiles = !(signalOrOptions instanceof AbortSignal) ? signalOrOptions?.projectFiles : undefined;
+  const engine = !(signalOrOptions instanceof AbortSignal) ? signalOrOptions?.engine || 'pdflatex' : 'pdflatex';
+
+  const preparedSource = resolveLatexImports(latexCode, projectFiles);
 
   // ---- Strategy 1: Local Vite proxy (recommended — bypasses CORS) ----
   try {
     const formData = new FormData();
     formData.append('filecontents[]', preparedSource);
     formData.append('filename[]', 'document.tex');
-    formData.append('engine', 'pdflatex');
+    formData.append('engine', engine);
     formData.append('return', 'pdf');
+
+    if (projectFiles) {
+      for (const file of projectFiles) {
+        if (file.type === 'file' && file.content && file.path !== 'document.tex' && file.name !== 'main.tex') {
+          formData.append('filename[]', file.path || file.name);
+          formData.append('filecontents[]', file.content);
+        }
+      }
+    }
 
     const response = await fetch('/api/compile-latex', {
       method: 'POST',
